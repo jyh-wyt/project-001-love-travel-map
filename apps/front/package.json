@@ -17,6 +17,7 @@
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "slate": "^0.124.0",
     "three": "^0.184.0"
   },
   "devDependencies": {
