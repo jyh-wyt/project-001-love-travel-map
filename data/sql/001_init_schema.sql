@@ -1,0 +1,157 @@
+CREATE DATABASE IF NOT EXISTS love_travel DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE love_travel;
+
+CREATE TABLE IF NOT EXISTS app_user (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  nickname VARCHAR(50) NULL,
+  avatar_url VARCHAR(500) NULL,
+  user_type VARCHAR(20) NOT NULL DEFAULT 'anonymous',
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS user_auth_identity (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  identity_type VARCHAR(30) NOT NULL,
+  identity_value VARCHAR(200) NOT NULL,
+  credential_hash VARCHAR(255) NULL,
+  verified TINYINT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_identity (identity_type, identity_value),
+  KEY idx_user_id (user_id)
+);
+
+CREATE TABLE IF NOT EXISTS couple_space (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  space_name VARCHAR(100) NULL,
+  cover_image_url VARCHAR(500) NULL,
+  creator_user_id BIGINT NOT NULL,
+  member_limit INT NOT NULL DEFAULT 2,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS couple_space_member (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  space_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  role VARCHAR(20) NOT NULL,
+  joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_space_user (space_id, user_id),
+  KEY idx_user_id (user_id)
+);
+
+CREATE TABLE IF NOT EXISTS invite_code (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  space_id BIGINT NOT NULL,
+  code VARCHAR(32) NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'unused',
+  expire_at DATETIME NOT NULL,
+  used_by_user_id BIGINT NULL,
+  used_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_code (code),
+  KEY idx_space_id (space_id)
+);
+
+CREATE TABLE IF NOT EXISTS trip (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  space_id BIGINT NOT NULL,
+  title VARCHAR(100) NOT NULL,
+  province_code VARCHAR(20) NOT NULL,
+  province_name VARCHAR(50) NOT NULL,
+  city_code VARCHAR(20) NOT NULL,
+  city_name VARCHAR(50) NULL,
+  cover_image_url VARCHAR(500) NULL,
+  start_date DATE NULL,
+  end_date DATE NULL,
+  created_by_user_id BIGINT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0,
+  KEY idx_space_id (space_id),
+  KEY idx_region (province_code, city_code),
+  UNIQUE KEY uk_space_city (space_id, city_code, deleted)
+);
+
+CREATE TABLE IF NOT EXISTS trip_post (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  space_id BIGINT NOT NULL,
+  trip_id BIGINT NOT NULL,
+  author_user_id BIGINT NOT NULL,
+  content TEXT NULL,
+  polished_content TEXT NULL,
+  post_date DATE NULL,
+  location_name VARCHAR(100) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0,
+  KEY idx_trip_id (trip_id),
+  KEY idx_space_id (space_id)
+);
+
+CREATE TABLE IF NOT EXISTS trip_image (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  space_id BIGINT NOT NULL,
+  trip_id BIGINT NOT NULL,
+  post_id BIGINT NULL,
+  uploader_user_id BIGINT NOT NULL,
+  oss_object_key VARCHAR(500) NOT NULL,
+  image_url VARCHAR(500) NOT NULL,
+  thumbnail_url VARCHAR(500) NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0,
+  KEY idx_trip_id (trip_id),
+  KEY idx_post_id (post_id),
+  KEY idx_space_id (space_id)
+);
+
+CREATE TABLE IF NOT EXISTS travel_plan_day (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  space_id BIGINT NOT NULL,
+  trip_id BIGINT NULL,
+  plan_date DATE NULL,
+  title VARCHAR(100) NULL,
+  detail TEXT NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_by_user_id BIGINT NULL,
+  time_arrangement TEXT NULL,
+  places TEXT NULL,
+  remark TEXT NULL,
+  updated_by_user_id BIGINT NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0,
+  KEY idx_space_date (space_id, plan_date),
+  KEY idx_trip_id (trip_id)
+);
+
+CREATE TABLE IF NOT EXISTS ai_polish_log (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  space_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  post_id BIGINT NULL,
+  model_name VARCHAR(100) NOT NULL,
+  input_text TEXT NOT NULL,
+  output_text TEXT NULL,
+  status VARCHAR(20) NOT NULL,
+  error_message TEXT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0,
+  KEY idx_user_created (user_id, created_at),
+  KEY idx_space_id (space_id)
+);
