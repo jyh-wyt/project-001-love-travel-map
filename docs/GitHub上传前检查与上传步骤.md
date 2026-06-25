@@ -253,3 +253,11 @@ publish = .next
 
 去构建前端。
 
+并且要让 Netlify 明确启用 Next.js 运行时插件：
+
+```text
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+```
+
+如果 Netlify 显示构建成功，但预览链接或永久链接打开是 `Page not found`，优先检查 Deploy log 是否出现 `Next.js Runtime`、`OpenNext` 或 `@netlify/plugin-nextjs`。没有出现时，通常是 Next.js 运行时没有生效，需要确认 `netlify.toml` 已经提交并推送。
