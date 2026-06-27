@@ -43,7 +43,7 @@ type VisitedRegion = {
   recordCount: number;
 };
 
-const DATAV_BOUNDARY_URL = "https://geo.datav.aliyun.com/areas_v3/bound";
+const LOCAL_BOUNDARY_URL = "/geojson/bound";
 
 echarts.use([MapChart, GeoComponent, TooltipComponent, CanvasRenderer]);
 
@@ -67,7 +67,7 @@ export function ProvinceCityMap({ province }: { province: Province }) {
       }
 
       try {
-        const response = await fetch(`${DATAV_BOUNDARY_URL}/${province.code}_full.json`);
+        const response = await fetch(`${LOCAL_BOUNDARY_URL}/${province.code}_full.json`);
         if (!response.ok) {
           throw new Error(`Province GeoJSON request failed: ${response.status}`);
         }

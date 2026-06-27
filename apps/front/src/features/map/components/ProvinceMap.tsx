@@ -12,7 +12,7 @@ import { requestJson } from "@/shared/lib/api";
 import { useAuthGuard } from "@/features/auth/hooks/useAuthGuard";
 
 const CHINA_MAP_NAME = "china";
-const CHINA_GEOJSON_URL = "https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json";
+const CHINA_GEOJSON_URL = "/geojson/bound/100000_full.json";
 
 echarts.use([MapChart, TooltipComponent, CanvasRenderer]);
 
