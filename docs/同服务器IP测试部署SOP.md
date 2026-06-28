@@ -384,3 +384,193 @@ systemd 守护进程
 更严格的防火墙
 前后端分域名或统一 HTTPS 入口
 ```
+## 线上实战补充：2026-06-27
+
+本节记录本项目第一次在腾讯云 Ubuntu 22.04 服务器完成同机部署后的最终确认规则。
+
+### 1. 发布流程必须以 Git 为准
+
+企业项目不要靠手工上传零散文件修线上问题。标准流程应为：
+
+```text
+本地修改代码 -> 本地构建验证 -> GitHub Desktop 提交并 Push -> 服务器 git pull -> 服务器构建 -> systemd 重启服务 -> 线上验证
+```
+
+服务器拉取 GitHub 如果出现 HTTP2 framing 或 timeout，可先执行：
+
+```bash
+git config --global http.version HTTP/1.1
+git config --global http.postBuffer 524288000
+git pull
+```
+
+这只是修复 Git 网络传输兼容问题，不改变项目发布原则。
+
+### 2. 线上服务统一交给 systemd 托管
+
+临时测试可以使用 `nohup`，正式部署应使用 systemd。当前项目使用：
+
+```text
+love-travel-front.service  -> Next.js 前端，127.0.0.1:3000
+love-travel-server.service -> Spring Boot 后端，127.0.0.1:8080
+love-travel-ai.service     -> FastAPI AI 服务，127.0.0.1:8000
+```
+
+常用命令：
+
+```bash
+systemctl status love-travel-front --no-pager
+systemctl status love-travel-server --no-pager
+systemctl status love-travel-ai --no-pager
+
+systemctl restart love-travel-front
+systemctl restart love-travel-server
+systemctl restart love-travel-ai
+
+journalctl -u love-travel-front -n 100 --no-pager
+journalctl -u love-travel-server -n 100 --no-pager
+journalctl -u love-travel-ai -n 100 --no-pager
+```
+
+注意：`systemctl status` 默认会进入分页器，按 `q` 退出；也可以统一加 `--no-pager`。
+
+### 3. systemd 环境变量文件不要带 export
+
+开发时的 shell 环境变量文件可以写：
+
+```bash
+export MYSQL_USERNAME='love_travel'
+```
+
+systemd 的 `EnvironmentFile` 更适合使用：
+
+```text
+MYSQL_USERNAME='love_travel'
+```
+
+因此本项目使用：
+
+```bash
+sed -E "s/^export //" /opt/love-travel/env/server.env > /opt/love-travel/env/server.systemd.env
+sed -E "s/^export //" /opt/love-travel/env/ai.env > /opt/love-travel/env/ai.systemd.env
+```
+
+修改 `/opt/love-travel/env/*.env` 后，必须重新生成对应的 `*.systemd.env`，再重启服务。
+
+### 4. 环境变量名必须和代码一致
+
+本次部署中踩过的坑：文档里写了 `DB_*`、`OSS_*`、`DASHSCOPE_API_KEY`，但代码实际读取的是其他名字，导致服务启动后仍然使用默认值或认为配置为空。
+
+当前后端实际读取：
+
+```text
+MYSQL_URL
+MYSQL_USERNAME
+MYSQL_PASSWORD
+REDIS_HOST
+REDIS_PORT
+REDIS_PASSWORD
+FRONTEND_ALLOWED_ORIGINS
+AI_SERVICE_BASE_URL
+ALIYUN_OSS_ENDPOINT
+ALIYUN_OSS_BUCKET
+ALIYUN_ACCESS_KEY_ID
+ALIYUN_ACCESS_KEY_SECRET
+ALIYUN_OSS_PUBLIC_BASE_URL
+ALIYUN_OSS_SIGNED_URL_EXPIRE_MINUTES
+```
+
+当前 Python AI 服务实际读取：
+
+```text
+ALIYUN_DASHSCOPE_API_KEY
+QWEN_MODEL_NAME
+```
+
+排查方法：
+
+```bash
+grep -R "MYSQL_USERNAME\|ALIYUN_OSS\|DASHSCOPE" -n apps/server/src/main apps/ai-service/app
+```
+
+### 5. GeoJSON 静态资源本地化
+
+线上首页地图不应在运行时依赖第三方 GeoJSON 地址。第三方接口一旦超时、跨域失败或被网络拦截，首页地图就会加载失败。
+
+当前项目已将地图资源放到：
+
+```text
+apps/front/public/geojson/bound/
+```
+
+前端访问路径：
+
+```text
+/geojson/bound/100000_full.json
+/geojson/bound/{provinceCode}_full.json
+```
+
+部署后可验证：
+
+```bash
+curl -I http://127.0.0.1:3000/geojson/bound/100000_full.json
+curl -I http://127.0.0.1/geojson/bound/100000_full.json
+```
+
+返回 `200 OK` 才说明静态地图文件已被正确发布。
+
+### 6. 数据库与 Redis 安全规则
+
+MySQL 和 Redis 只允许服务器本机或内网访问，不开放公网端口。
+
+当前公网只开放：
+
+```text
+22 SSH
+80 HTTP
+```
+
+不开放：
+
+```text
+3306 MySQL
+6379 Redis
+8080 Java
+8000 Python
+3000 Next.js
+```
+
+Redis 配置要求：
+
+```text
+bind 127.0.0.1 ::1
+protected-mode yes
+requirepass 强密码
+```
+
+MySQL 使用项目专用账号 `love_travel`，不要使用 root 账号跑业务。
+
+### 7. AccessKey 与 API Key 安全规则
+
+阿里云 OSS AccessKey、DashScope API Key、数据库密码、Redis 密码只允许放在服务器环境变量文件中，不允许提交到 GitHub。
+
+如果 Key 曾经出现在聊天、截图、提交记录或公开仓库中，应在云控制台禁用旧 Key，重新生成新 Key，并更新服务器环境变量。
+
+### 8. 最终线上链路
+
+```text
+浏览器
+  -> http://服务器公网IP
+  -> Nginx 80
+    -> /       -> Next.js 127.0.0.1:3000
+    -> /api/   -> Spring Boot 127.0.0.1:8080
+
+Spring Boot
+  -> MySQL 127.0.0.1:3306
+  -> Redis 127.0.0.1:6379
+  -> FastAPI AI 127.0.0.1:8000
+  -> Aliyun OSS
+
+FastAPI AI
+  -> DashScope / Qwen
+```

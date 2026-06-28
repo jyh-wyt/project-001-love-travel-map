@@ -28,7 +28,7 @@ export default function LoginPage() {
       try {
         await fetchCurrentUser();
         if (!ignore) {
-          router.replace(resolveLoginRedirectPath());
+          router.replace("/");
         }
       } catch {
         // Staying on the login page is correct when the session is missing or expired.
@@ -73,7 +73,7 @@ export default function LoginPage() {
       } else {
         await login(account, password);
       }
-      router.replace(resolveLoginRedirectPath());
+      router.replace("/");
     } catch (error) {
       setErrorMessage(toErrorMessage(error));
     } finally {
@@ -189,17 +189,4 @@ export default function LoginPage() {
       </section>
     </main>
   );
-}
-
-function resolveLoginRedirectPath() {
-  if (typeof window === "undefined") {
-    return "/";
-  }
-
-  const next = new URLSearchParams(window.location.search).get("next");
-  if (!next || !next.startsWith("/") || next.startsWith("//") || next.startsWith("/login")) {
-    return "/";
-  }
-
-  return next;
 }

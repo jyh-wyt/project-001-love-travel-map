@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { CalendarDays, Heart, Map } from "lucide-react";
 
 type BottomNavProps = {
@@ -14,6 +15,8 @@ const items = [
 ] as const;
 
 export function BottomNav({ active }: BottomNavProps) {
+  const router = useRouter();
+
   return (
     <nav className="bottom-nav" aria-label="主导航">
       {items.map(({ key, href, label, Icon }) => (
@@ -21,6 +24,10 @@ export function BottomNav({ active }: BottomNavProps) {
           className={active === key ? "bottom-nav-item active" : "bottom-nav-item"}
           href={href}
           key={key}
+          onClick={(event) => {
+            event.preventDefault();
+            router.push(href);
+          }}
         >
           <Icon aria-hidden="true" size={20} strokeWidth={2} />
           <span>{label}</span>
