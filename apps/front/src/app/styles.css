@@ -1657,12 +1657,16 @@ p {
   position: relative;
   min-height: 400px;
   display: grid;
+  grid-template-rows: 1fr auto;
   place-items: center;
+  align-content: center;
+  gap: 10px;
   overflow: hidden;
   background: #fff;
   cursor: grab;
   touch-action: none;
   user-select: none;
+  padding: 18px 0 20px;
 }
 
 .photo-sphere-card.dragging {
@@ -1672,7 +1676,7 @@ p {
 .photo-sphere-stage {
   position: relative;
   width: min(560px, 100%);
-  height: 360px;
+  height: 334px;
   transform: translateZ(0);
 }
 
@@ -1688,6 +1692,7 @@ p {
   padding: 0;
   background: #fff;
   box-shadow: 0 10px 22px rgb(31 43 39 / 0.14);
+  touch-action: none;
   transform: translate(-50%, -50%) translate(var(--panel-x), var(--panel-y)) scale(var(--panel-scale));
   transition:
     opacity 180ms ease,
@@ -1703,13 +1708,11 @@ p {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  -webkit-user-drag: none;
+  pointer-events: none;
 }
 
 .photo-sphere-hint {
-  position: absolute;
-  left: 50%;
-  bottom: 2px;
-  transform: translateX(-50%);
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgb(255 255 255 / 0.9);
@@ -1719,6 +1722,8 @@ p {
   line-height: 1;
   padding: 8px 12px;
   pointer-events: none;
+  position: relative;
+  z-index: 3;
 }
 
 .photo-sphere-empty {

@@ -7,20 +7,12 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "love-travel.oss")
 public class OssProperties {
 
-    private String endpoint;
     private String bucket;
-    private String accessKeyId;
-    private String accessKeySecret;
+    private String region;
+    private String secretId;
+    private String secretKey;
     private String publicBaseUrl;
     private Integer signedUrlExpireMinutes = 10;
-
-    public String getEndpoint() {
-        return endpoint;
-    }
-
-    public void setEndpoint(String endpoint) {
-        this.endpoint = endpoint;
-    }
 
     public String getBucket() {
         return bucket;
@@ -30,20 +22,28 @@ public class OssProperties {
         this.bucket = bucket;
     }
 
-    public String getAccessKeyId() {
-        return accessKeyId;
+    public String getRegion() {
+        return region;
     }
 
-    public void setAccessKeyId(String accessKeyId) {
-        this.accessKeyId = accessKeyId;
+    public void setRegion(String region) {
+        this.region = region;
     }
 
-    public String getAccessKeySecret() {
-        return accessKeySecret;
+    public String getSecretId() {
+        return secretId;
     }
 
-    public void setAccessKeySecret(String accessKeySecret) {
-        this.accessKeySecret = accessKeySecret;
+    public void setSecretId(String secretId) {
+        this.secretId = secretId;
+    }
+
+    public String getSecretKey() {
+        return secretKey;
+    }
+
+    public void setSecretKey(String secretKey) {
+        this.secretKey = secretKey;
     }
 
     public String getPublicBaseUrl() {

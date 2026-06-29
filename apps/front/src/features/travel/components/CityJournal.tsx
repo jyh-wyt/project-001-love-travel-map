@@ -532,9 +532,9 @@ export function CityJournal({ provinceCode, provinceName, cityCode, cityName }: 
           </div>
           <label className="upload-target file-upload-target">
             <ImagePlus aria-hidden="true" size={22} />
-            {uploading ? "正在上传到 OSS" : remainingDraftImageCount > 0 ? "选择照片上传 OSS" : "已达到 6 张上限"}
+            {uploading ? "正在上传到 OSS" : remainingDraftImageCount > 0 ? "选择照片上传 OSS，可多选" : "已达到 6 张上限"}
             <input
-              accept="image/jpeg,image/png,image/webp,image/gif"
+              accept="image/*"
               disabled={loading || saving || uploading || draft.images.length >= MAX_IMAGES || !canEdit}
               multiple
               onChange={(event) => {
@@ -629,9 +629,9 @@ export function CityJournal({ provinceCode, provinceName, cityCode, cityName }: 
                         ? "正在上传到 OSS"
                         : post.images.length + editingImages.length >= MAX_IMAGES
                           ? "已达到 6 张上限"
-                          : "继续添加照片"}
+                          : "继续添加照片，可多选"}
                       <input
-                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        accept="image/*"
                         disabled={saving || uploading || post.images.length + editingImages.length >= MAX_IMAGES || !canEdit}
                         multiple
                         onChange={(event) => {
@@ -821,6 +821,7 @@ function PhotoSphere({
   }, [images, rotation]);
 
   function handlePointerDown(event: PointerEvent<HTMLDivElement>) {
+    event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragState({
       active: true,
@@ -836,6 +837,7 @@ function PhotoSphere({
     if (!dragState?.active) {
       return;
     }
+    event.preventDefault();
 
     const deltaX = event.clientX - dragState.lastX;
     const deltaY = event.clientY - dragState.lastY;
@@ -871,6 +873,12 @@ function PhotoSphere({
       className={`photo-sphere-card${dragState?.active ? " dragging" : ""}`}
       onPointerCancel={handlePointerUp}
       onPointerDown={handlePointerDown}
+      onPointerLeave={(event) => {
+        if (dragState?.active && event.buttons === 0) {
+          handlePointerUp(event);
+        }
+      }}
+      onLostPointerCapture={() => setDragState(null)}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
     >
@@ -880,33 +888,35 @@ function PhotoSphere({
           <span>发布第一条记录后，这里会生成照片球。</span>
         </div>
       ) : (
-        <div className="photo-sphere-stage" aria-label={`${cityName}照片球`}>
-          {panels.map((panel) => (
-            <button
-              className="photo-sphere-panel"
-              key={panel.key}
-              onClick={() => previewFromPanel(panel.image)}
-              style={
-                {
-                  "--panel-x": `${panel.left}px`,
-                  "--panel-y": `${panel.top}px`,
-                  "--panel-scale": panel.scale,
-                  opacity: panel.opacity,
-                  zIndex: panel.zIndex
-                } as CSSProperties
-              }
-              type="button"
-            >
-              <img alt={panel.image.alt} src={panel.image.imageUrl} />
-            </button>
-          ))}
-          <span className="photo-sphere-hint">按住拖动查看背面</span>
-        </div>
+        <>
+          <div className="photo-sphere-stage" aria-label={`${cityName}照片球`}>
+            {panels.map((panel) => (
+              <button
+                className="photo-sphere-panel"
+                key={panel.key}
+                onClick={() => previewFromPanel(panel.image)}
+                onDragStart={(event) => event.preventDefault()}
+                style={
+                  {
+                    "--panel-x": `${panel.left}px`,
+                    "--panel-y": `${panel.top}px`,
+                    "--panel-scale": panel.scale,
+                    opacity: panel.opacity,
+                    zIndex: panel.zIndex
+                  } as CSSProperties
+                }
+                type="button"
+              >
+                <img alt={panel.image.alt} draggable={false} src={panel.image.imageUrl} />
+              </button>
+            ))}
+          </div>
+          <span className="photo-sphere-hint">按住照片区域拖动查看背面</span>
+        </>
       )}
     </div>
   );
 }
-
 function buildSphereImages(images: PreviewImage[]) {
   if (images.length === 0) {
     return [];
@@ -961,3 +971,4 @@ function parseDateParts(value: string) {
     day: Number(matched[3])
   };
 }
+

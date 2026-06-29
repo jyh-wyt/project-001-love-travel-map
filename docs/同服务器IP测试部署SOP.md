@@ -165,12 +165,12 @@ export REDIS_PASSWORD='换成Redis强密码'
 export LOVE_TRAVEL_SESSION_SECRET='换成一段至少32位的随机字符串'
 export FRONTEND_ALLOWED_ORIGINS='http://服务器公网IP'
 export AI_SERVICE_BASE_URL='http://127.0.0.1:8000'
-export ALIYUN_OSS_ENDPOINT='https://oss-cn-hangzhou.aliyuncs.com'
-export ALIYUN_OSS_BUCKET='你的Bucket名称'
-export ALIYUN_ACCESS_KEY_ID='你的AccessKeyId'
-export ALIYUN_ACCESS_KEY_SECRET='你的AccessKeySecret'
-export ALIYUN_OSS_PUBLIC_BASE_URL=''
-export ALIYUN_OSS_SIGNED_URL_EXPIRE_MINUTES='10'
+export TENCENT_COS_REGION='ap-guangzhou'
+export TENCENT_COS_BUCKET='love-travel-images-jyh-1447356754'
+export TENCENT_COS_SECRET_ID='你的腾讯云 SecretId'
+export TENCENT_COS_SECRET_KEY='你的腾讯云 SecretKey'
+export TENCENT_COS_PUBLIC_BASE_URL=''
+export TENCENT_COS_SIGNED_URL_EXPIRE_MINUTES='10'
 ```
 
 创建 Python AI 服务环境变量：
@@ -346,10 +346,10 @@ NEXT_PUBLIC_API_BASE_URL= npm run build
 检查 Java 环境变量：
 
 ```text
-ALIYUN_OSS_ENDPOINT
-ALIYUN_OSS_BUCKET
-ALIYUN_ACCESS_KEY_ID
-ALIYUN_ACCESS_KEY_SECRET
+TENCENT_COS_REGION
+TENCENT_COS_BUCKET
+TENCENT_COS_SECRET_ID
+TENCENT_COS_SECRET_KEY
 ```
 
 同时确认 OSS bucket 权限和 endpoint 与实际地域一致。
@@ -472,12 +472,12 @@ REDIS_PORT
 REDIS_PASSWORD
 FRONTEND_ALLOWED_ORIGINS
 AI_SERVICE_BASE_URL
-ALIYUN_OSS_ENDPOINT
-ALIYUN_OSS_BUCKET
-ALIYUN_ACCESS_KEY_ID
-ALIYUN_ACCESS_KEY_SECRET
-ALIYUN_OSS_PUBLIC_BASE_URL
-ALIYUN_OSS_SIGNED_URL_EXPIRE_MINUTES
+TENCENT_COS_REGION
+TENCENT_COS_BUCKET
+TENCENT_COS_SECRET_ID
+TENCENT_COS_SECRET_KEY
+TENCENT_COS_PUBLIC_BASE_URL
+TENCENT_COS_SIGNED_URL_EXPIRE_MINUTES
 ```
 
 当前 Python AI 服务实际读取：
@@ -490,7 +490,7 @@ QWEN_MODEL_NAME
 排查方法：
 
 ```bash
-grep -R "MYSQL_USERNAME\|ALIYUN_OSS\|DASHSCOPE" -n apps/server/src/main apps/ai-service/app
+grep -R "MYSQL_USERNAME\|TENCENT_COS\|DASHSCOPE" -n apps/server/src/main apps/ai-service/app
 ```
 
 ### 5. GeoJSON 静态资源本地化
@@ -552,7 +552,7 @@ MySQL 使用项目专用账号 `love_travel`，不要使用 root 账号跑业务
 
 ### 7. AccessKey 与 API Key 安全规则
 
-阿里云 OSS AccessKey、DashScope API Key、数据库密码、Redis 密码只允许放在服务器环境变量文件中，不允许提交到 GitHub。
+腾讯云 COS SecretId/SecretKey、DashScope API Key、数据库密码、Redis 密码只允许放在服务器环境变量文件中，不允许提交到 GitHub。
 
 如果 Key 曾经出现在聊天、截图、提交记录或公开仓库中，应在云控制台禁用旧 Key，重新生成新 Key，并更新服务器环境变量。
 
@@ -569,7 +569,7 @@ Spring Boot
   -> MySQL 127.0.0.1:3306
   -> Redis 127.0.0.1:6379
   -> FastAPI AI 127.0.0.1:8000
-  -> Aliyun OSS
+  -> Tencent COS
 
 FastAPI AI
   -> DashScope / Qwen

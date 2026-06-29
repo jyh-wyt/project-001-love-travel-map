@@ -159,8 +159,14 @@ export default function SpacesPage() {
     if (!inviteCode) {
       return;
     }
-    await navigator.clipboard.writeText(inviteCode.code);
-    setMessage("邀请码已复制。");
+    const copied = await copyText(inviteCode.code);
+    if (copied) {
+      setMessage("邀请码已复制。");
+      setErrorMessage("");
+    } else {
+      setErrorMessage(`当前手机浏览器不支持自动复制，请长按邀请码手动复制：${inviteCode.code}`);
+      setMessage("");
+    }
   }
 
   return (
@@ -262,6 +268,35 @@ export default function SpacesPage() {
       <BottomNav active="space" />
     </main>
   );
+}
+
+async function copyText(value: string) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch {
+    // Fall back to the textarea method below.
+  }
+
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.top = "0";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+    const copied = document.execCommand("copy");
+    document.body.removeChild(textarea);
+    return copied;
+  } catch {
+    return false;
+  }
 }
 
 function getInviteCountdown(value: string, now: number) {

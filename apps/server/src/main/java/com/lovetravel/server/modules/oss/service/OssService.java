@@ -1,11 +1,19 @@
 package com.lovetravel.server.modules.oss.service;
 
-import com.aliyun.oss.OSS;
-import com.aliyun.oss.OSSClientBuilder;
-import com.aliyun.oss.model.ObjectMetadata;
 import com.lovetravel.server.common.ApiException;
-import com.lovetravel.server.modules.auth.mapper.AppUserMapper;
 import com.lovetravel.server.modules.auth.domain.AppUser;
+import com.lovetravel.server.modules.auth.mapper.AppUserMapper;
+import com.lovetravel.server.modules.oss.config.OssProperties;
+import com.lovetravel.server.modules.oss.vo.OssUploadResponse;
+import com.qcloud.cos.COSClient;
+import com.qcloud.cos.ClientConfig;
+import com.qcloud.cos.auth.BasicCOSCredentials;
+import com.qcloud.cos.auth.COSCredentials;
+import com.qcloud.cos.http.HttpMethodName;
+import com.qcloud.cos.model.GeneratePresignedUrlRequest;
+import com.qcloud.cos.model.ObjectMetadata;
+import com.qcloud.cos.model.PutObjectRequest;
+import com.qcloud.cos.region.Region;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -16,8 +24,6 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import com.lovetravel.server.modules.oss.config.OssProperties;
-import com.lovetravel.server.modules.oss.vo.OssUploadResponse;
 
 @Service
 public class OssService {
@@ -44,18 +50,20 @@ public class OssService {
         metadata.setContentType(file.getContentType());
         metadata.setContentLength(file.getSize());
 
-        OSS ossClient = new OSSClientBuilder().build(
-                properties.getEndpoint(),
-                properties.getAccessKeyId(),
-                properties.getAccessKeySecret());
+        COSClient cosClient = createCosClient();
         try {
-            ossClient.putObject(properties.getBucket(), objectKey, file.getInputStream(), metadata);
+            PutObjectRequest request = new PutObjectRequest(
+                    properties.getBucket(),
+                    objectKey,
+                    file.getInputStream(),
+                    metadata);
+            cosClient.putObject(request);
         } catch (IOException exception) {
             throw new ApiException("读取图片文件失败，请重新选择图片");
         } catch (RuntimeException exception) {
-            throw new ApiException("上传 OSS 失败，请检查 OSS 配置或网络");
+            throw new ApiException("上传 COS 失败，请检查 COS 配置或网络");
         } finally {
-            ossClient.shutdown();
+            cosClient.shutdown();
         }
 
         return new OssUploadResponse(resolveDisplayUrl(objectKey), objectKey);
@@ -67,16 +75,13 @@ public class OssService {
         }
         validateConfig();
 
-        OSS ossClient = new OSSClientBuilder().build(
-                properties.getEndpoint(),
-                properties.getAccessKeyId(),
-                properties.getAccessKeySecret());
+        COSClient cosClient = createCosClient();
         try {
-            ossClient.deleteObject(properties.getBucket(), objectKey);
+            cosClient.deleteObject(properties.getBucket(), objectKey);
         } catch (RuntimeException exception) {
-            throw new ApiException("删除 OSS 图片失败，请稍后重试");
+            throw new ApiException("删除 COS 图片失败，请稍后重试");
         } finally {
-            ossClient.shutdown();
+            cosClient.shutdown();
         }
     }
 
@@ -89,28 +94,29 @@ public class OssService {
         }
         validateConfig();
 
-        OSS ossClient = new OSSClientBuilder().build(
-                properties.getEndpoint(),
-                properties.getAccessKeyId(),
-                properties.getAccessKeySecret());
+        COSClient cosClient = createCosClient();
         try {
-            Date expiration = new Date(System.currentTimeMillis() + signedUrlExpireMillis());
-            return ossClient.generatePresignedUrl(properties.getBucket(), objectKey, expiration).toString();
+            GeneratePresignedUrlRequest request = new GeneratePresignedUrlRequest(
+                    properties.getBucket(),
+                    objectKey,
+                    HttpMethodName.GET);
+            request.setExpiration(new Date(System.currentTimeMillis() + signedUrlExpireMillis()));
+            return cosClient.generatePresignedUrl(request).toString();
         } catch (RuntimeException exception) {
-            throw new ApiException("生成 OSS 图片访问地址失败，请稍后重试");
+            throw new ApiException("生成 COS 图片访问地址失败，请稍后重试");
         } finally {
-            ossClient.shutdown();
+            cosClient.shutdown();
         }
     }
 
     public Map<String, Object> getStatus() {
-        boolean configured = !isBlank(properties.getEndpoint())
+        boolean configured = !isBlank(properties.getRegion())
                 && !isBlank(properties.getBucket())
-                && !isBlank(properties.getAccessKeyId())
-                && !isBlank(properties.getAccessKeySecret());
+                && !isBlank(properties.getSecretId())
+                && !isBlank(properties.getSecretKey());
         return Map.of(
                 "configured", configured,
-                "endpoint", properties.getEndpoint() == null ? "" : properties.getEndpoint(),
+                "region", properties.getRegion() == null ? "" : properties.getRegion(),
                 "bucket", properties.getBucket() == null ? "" : properties.getBucket(),
                 "signedUrlExpireMinutes", properties.getSignedUrlExpireMinutes() == null ? 10 : properties.getSignedUrlExpireMinutes());
     }
@@ -123,12 +129,18 @@ public class OssService {
     }
 
     private void validateConfig() {
-        if (isBlank(properties.getEndpoint())
+        if (isBlank(properties.getRegion())
                 || isBlank(properties.getBucket())
-                || isBlank(properties.getAccessKeyId())
-                || isBlank(properties.getAccessKeySecret())) {
-            throw new ApiException("OSS 配置不完整，请先配置 endpoint、bucket 和 AccessKey");
+                || isBlank(properties.getSecretId())
+                || isBlank(properties.getSecretKey())) {
+            throw new ApiException("COS 配置不完整，请先配置 region、bucket、SecretId 和 SecretKey");
         }
+    }
+
+    private COSClient createCosClient() {
+        COSCredentials credentials = new BasicCOSCredentials(properties.getSecretId(), properties.getSecretKey());
+        ClientConfig clientConfig = new ClientConfig(new Region(properties.getRegion()));
+        return new COSClient(credentials, clientConfig);
     }
 
     private void validateImage(MultipartFile file) {
