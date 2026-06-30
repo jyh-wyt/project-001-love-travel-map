@@ -61,6 +61,7 @@ public class AiPlanDayService {
     private final AiAgentEventMapper eventMapper;
     private final AiPlanDayDraftMapper draftMapper;
     private final AppUserMapper appUserMapper;
+    private final AiTravelMemorySyncService memorySyncService;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final String aiServiceBaseUrl;
@@ -73,6 +74,7 @@ public class AiPlanDayService {
             AiAgentEventMapper eventMapper,
             AiPlanDayDraftMapper draftMapper,
             AppUserMapper appUserMapper,
+            AiTravelMemorySyncService memorySyncService,
             ObjectMapper objectMapper,
             StringRedisTemplate redisTemplate,
             @Value("${love-travel.ai-service.base-url}") String aiServiceBaseUrl) {
@@ -82,6 +84,7 @@ public class AiPlanDayService {
         this.eventMapper = eventMapper;
         this.draftMapper = draftMapper;
         this.appUserMapper = appUserMapper;
+        this.memorySyncService = memorySyncService;
         this.objectMapper = objectMapper;
         this.redisTemplate = redisTemplate;
         this.httpClient = HttpClient.newBuilder()
@@ -99,6 +102,7 @@ public class AiPlanDayService {
         ensureShortWindowRateLimit(userId);
         ensureQuota(userId);
         acquireGenerateLock(userId, dayId);
+        memorySyncService.syncSpaceMemoriesBestEffort(space.getId());
 
         try {
             String runId = "ai_run_" + UUID.randomUUID().toString().replace("-", "");
