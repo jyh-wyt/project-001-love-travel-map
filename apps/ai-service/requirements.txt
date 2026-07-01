@@ -4,4 +4,4 @@ pydantic-settings
 langchain
 langchain-community
 dashscope
-pymilvus
+pymilvus[milvus_lite]

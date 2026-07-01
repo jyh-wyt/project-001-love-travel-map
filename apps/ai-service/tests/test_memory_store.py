@@ -1,4 +1,5 @@
 import unittest
+from typing import Dict, List
 
 from app.features.memory.milvus_store import MilvusMemoryStore
 from app.features.memory.schemas import MemoryUpsertItem
@@ -17,10 +18,10 @@ class FakeMilvusClient:
         self.created = True
         self.create_kwargs = kwargs
 
-    def upsert(self, collection_name: str, data: list[dict]) -> None:
+    def upsert(self, collection_name: str, data: List[Dict]) -> None:
         self.upserted_data.extend(data)
 
-    def search(self, **kwargs) -> list[list[dict]]:
+    def search(self, **kwargs) -> List[List[Dict]]:
         self.search_calls.append(kwargs)
         return [[
             {
