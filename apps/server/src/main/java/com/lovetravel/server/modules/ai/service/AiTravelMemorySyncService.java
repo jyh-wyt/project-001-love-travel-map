@@ -1,9 +1,11 @@
 package com.lovetravel.server.modules.ai.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lovetravel.server.common.ApiException;
 import com.lovetravel.server.modules.ai.domain.AiTravelMemoryIndex;
+import com.lovetravel.server.modules.ai.dto.AiPlanDayGenerateRequest;
 import com.lovetravel.server.modules.ai.mapper.AiTravelMemoryIndexMapper;
 import com.lovetravel.server.modules.ai.service.AiTravelMemoryDocumentFactory.MemoryDocument;
 import com.lovetravel.server.modules.plan.domain.TravelPlanDay;
@@ -68,6 +70,23 @@ public class AiTravelMemorySyncService {
         } catch (Exception exception) {
             log.warn("AI memory sync skipped for spaceId={}: {}", spaceId, exception.getMessage());
             return new SyncResult(0, 0, false);
+        }
+    }
+
+    public List<Map<String, Object>> searchPlanMemoriesBestEffort(Long spaceId, AiPlanDayGenerateRequest request) {
+        try {
+            String query = documentFactory.buildPlanSearchQuery(
+                    request.getDestination(),
+                    request.getPlaces(),
+                    request.getMustVisitPlaces(),
+                    request.getNotes());
+            if (query.isBlank()) {
+                return List.of();
+            }
+            return callPythonSearch(spaceId, query);
+        } catch (Exception exception) {
+            log.warn("AI memory search skipped for spaceId={}: {}", spaceId, exception.getMessage());
+            return List.of();
         }
     }
 
@@ -149,6 +168,46 @@ public class AiTravelMemorySyncService {
             throw exception;
         } catch (Exception exception) {
             throw new ApiException("AI memory sync failed");
+        }
+    }
+
+    private List<Map<String, Object>> callPythonSearch(Long spaceId, String query) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("spaceId", spaceId);
+            payload.put("query", query);
+            payload.put("topK", 5);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(aiServiceBaseUrl + "/internal/ai/memories/search"))
+                    .timeout(Duration.ofSeconds(20))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)))
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() >= 400) {
+                throw new ApiException("AI memory search service unavailable");
+            }
+            JsonNode root = objectMapper.readTree(response.body());
+            JsonNode results = root.path("results");
+            if (!results.isArray()) {
+                return List.of();
+            }
+            List<Map<String, Object>> memories = new ArrayList<>();
+            for (JsonNode result : results) {
+                Map<String, Object> memory = new LinkedHashMap<>();
+                memory.put("memoryId", result.path("memoryId").asText(""));
+                memory.put("sourceType", result.path("sourceType").asText(""));
+                memory.put("sourceId", result.path("sourceId").asLong(0));
+                memory.put("cityName", result.path("cityName").asText(""));
+                memory.put("content", result.path("content").asText(""));
+                memory.put("score", result.path("score").asDouble(0));
+                memories.add(memory);
+            }
+            return memories;
+        } catch (ApiException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new ApiException("AI memory search failed");
         }
     }
 

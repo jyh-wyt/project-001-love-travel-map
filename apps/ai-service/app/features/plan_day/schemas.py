@@ -20,6 +20,7 @@ class PlanDayGenerateRequest(BaseModel):
     notes: Optional[str] = ""
     regenerate_mode: str = Field(default="NEW", alias="regenerateMode")
     source_draft: Optional[Any] = Field(default=None, alias="sourceDraft")
+    travel_memories: List[Dict[str, Any]] = Field(default_factory=list, alias="travelMemories")
 
 
 class WeatherResult(BaseModel):

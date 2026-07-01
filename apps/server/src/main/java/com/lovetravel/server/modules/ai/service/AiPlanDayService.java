@@ -210,6 +210,7 @@ public class AiPlanDayService {
             payload.put("notes", request.getNotes() == null ? "" : request.getNotes());
             payload.put("regenerateMode", normalizeRegenerateMode(request.getRegenerateMode()));
             payload.put("sourceDraft", loadSourceDraftJson(request.getSourceDraftId(), space.getId()));
+            payload.put("travelMemories", memorySyncService.searchPlanMemoriesBestEffort(space.getId(), request));
 
             HttpRequest pythonRequest = HttpRequest.newBuilder()
                     .uri(URI.create(aiServiceBaseUrl + "/internal/ai/plan-day/generate-stream"))

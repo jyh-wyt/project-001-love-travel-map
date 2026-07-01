@@ -6,6 +6,7 @@ import com.lovetravel.server.modules.travel.domain.TripPost;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 
@@ -89,8 +90,28 @@ public class AiTravelMemoryDocumentFactory {
         }
     }
 
+    public String buildPlanSearchQuery(String destination, List<String> places, List<String> mustVisitPlaces, String notes) {
+        StringBuilder query = new StringBuilder();
+        appendPart(query, "Destination", normalize(destination));
+        appendPart(query, "Places", String.join(", ", places == null ? List.of() : places));
+        appendPart(query, "Must visit", String.join(", ", mustVisitPlaces == null ? List.of() : mustVisitPlaces));
+        appendPart(query, "Notes", normalize(notes));
+        return query.toString().trim();
+    }
+
     private String normalize(String value) {
         return value == null ? "" : value.trim().replaceAll("\\s+", " ");
+    }
+
+    private void appendPart(StringBuilder builder, String label, String value) {
+        String normalized = normalize(value);
+        if (normalized.isBlank()) {
+            return;
+        }
+        if (!builder.isEmpty()) {
+            builder.append("\n");
+        }
+        builder.append(label).append(": ").append(normalized);
     }
 
     public record MemoryDocument(

@@ -9,6 +9,7 @@ import com.lovetravel.server.modules.plan.domain.TravelPlanDay;
 import com.lovetravel.server.modules.travel.domain.Trip;
 import com.lovetravel.server.modules.travel.domain.TripPost;
 import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class AiTravelMemoryDocumentFactoryTest {
@@ -48,5 +49,19 @@ class AiTravelMemoryDocumentFactoryTest {
         day.setDetail("");
 
         assertTrue(factory.fromPlanDay(day).isEmpty());
+    }
+
+    @Test
+    void buildsSearchQueryFromPlanRequestParts() {
+        String query = factory.buildPlanSearchQuery(
+                "Qingdao",
+                List.of("Badaguan", "Xiaomai Island"),
+                List.of("Xiaomai Island"),
+                "Prefer relaxed photo spots");
+
+        assertTrue(query.contains("Qingdao"));
+        assertTrue(query.contains("Badaguan"));
+        assertTrue(query.contains("Xiaomai Island"));
+        assertTrue(query.contains("Prefer relaxed photo spots"));
     }
 }

@@ -46,6 +46,7 @@ JSON 格式：
   ],
   "reminders": ["提醒1"]
 }}
+Travel memories from this private space: {travel_memories}
 """
 )
 
@@ -81,6 +82,7 @@ def _generate_with_qwen(request: PlanDayGenerateRequest, weather: Dict) -> PlanD
         regenerate_mode=request.regenerate_mode,
         source_draft=request.source_draft or "",
         weather=json.dumps(weather, ensure_ascii=False),
+        travel_memories=json.dumps(request.travel_memories[:5], ensure_ascii=False),
     )
 
     response = dashscope.Generation.call(
