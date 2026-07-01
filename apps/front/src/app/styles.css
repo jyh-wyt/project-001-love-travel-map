@@ -1088,10 +1088,21 @@ p {
 
 .ai-dialog-header h2 {
   margin-top: 6px;
+  line-height: 1.18;
+  text-wrap: balance;
 }
 
 .ai-dialog-header p {
   margin: 6px 0 0;
+}
+
+.ai-dialog-feedback {
+  border-bottom: 1px solid var(--line);
+  padding: 12px 22px 0;
+}
+
+.ai-dialog-feedback .plan-feedback {
+  margin: 0 0 12px;
 }
 
 .ai-kicker {

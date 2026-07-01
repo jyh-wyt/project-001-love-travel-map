@@ -99,7 +99,10 @@ public class AiTravelMemorySyncService {
             return new SyncResult(0, documents.size(), true);
         }
 
-        callPythonUpsert(changedDocuments);
+        boolean stored = callPythonUpsert(changedDocuments);
+        if (!stored) {
+            return new SyncResult(0, documents.size(), false);
+        }
         changedDocuments.forEach(this::upsertIndex);
         return new SyncResult(changedDocuments.size(), documents.size() - changedDocuments.size(), true);
     }
@@ -148,7 +151,7 @@ public class AiTravelMemorySyncService {
                 || !document.contentHash().equals(index.getContentHash());
     }
 
-    private void callPythonUpsert(List<MemoryDocument> documents) {
+    private boolean callPythonUpsert(List<MemoryDocument> documents) {
         try {
             List<Map<String, Object>> items = documents.stream()
                     .map(this::toPythonItem)
@@ -164,6 +167,8 @@ public class AiTravelMemorySyncService {
             if (response.statusCode() >= 400) {
                 throw new ApiException("AI memory service unavailable");
             }
+            JsonNode root = objectMapper.readTree(response.body());
+            return root.path("storeEnabled").asBoolean(false);
         } catch (ApiException exception) {
             throw exception;
         } catch (Exception exception) {

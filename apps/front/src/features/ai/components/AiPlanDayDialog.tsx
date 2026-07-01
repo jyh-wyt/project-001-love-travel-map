@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RadioGroup } from "@baseline-ui/core";
 import { CloudSun, MapPin, RefreshCcw, Sparkles, X } from "lucide-react";
 import { API_BASE_URL, requestJson, toErrorMessage } from "@/shared/lib/api";
@@ -75,6 +75,25 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
 
   const isDateBeyondForecast = useMemo(() => isBeyondForecastRange(day.date), [day.date]);
   const canContinueFromPlaces = places.length > 0;
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    setStep("places");
+    setPlaces([]);
+    setPlaceInput("");
+    setMustVisitPlaces([]);
+    setMorningMode("PLAY");
+    setAfternoonMode("PLAY");
+    setEveningMode("REST");
+    setNotes("");
+    setGenerateState("idle");
+    setProgressMessages([]);
+    setDraft(null);
+    setErrorMessage("");
+    setRegenerateChoiceOpen(false);
+  }, [day.id, isOpen]);
 
   if (!isOpen) {
     return null;
@@ -157,6 +176,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
       const response = await requestJson<AiApplyResponse>(`/api/ai/plan-day-drafts/${draft.draftId}/apply`, {
         method: "POST"
       });
+      setDraft(null);
       onApply(response.day);
       onClose();
     } catch (error) {
@@ -174,6 +194,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
         // Closing the dialog should not trap the user if discard fails.
       }
     }
+    setDraft(null);
     onClose();
   }
 
@@ -205,7 +226,11 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
           <StepPill active={step === "preview"} done={generateState === "done"} label="预览" />
         </div>
 
-        {errorMessage ? <p className="plan-feedback error">{errorMessage}</p> : null}
+        {errorMessage ? (
+          <div className="ai-dialog-feedback">
+            <p className="plan-feedback error">{errorMessage}</p>
+          </div>
+        ) : null}
 
         <div className="ai-dialog-body">
           {step === "places" ? (
