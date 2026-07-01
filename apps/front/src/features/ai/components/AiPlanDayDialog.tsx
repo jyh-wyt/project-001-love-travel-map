@@ -530,6 +530,32 @@ async function streamGeneratePlan({
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
   let finalDraft: AiDraft | null = null;
+  let streamError = "";
+
+  function handleSsePart(part: string) {
+    const event = parseSseEvent(part);
+    if (!event) {
+      return;
+    }
+
+    let data: Record<string, unknown>;
+    try {
+      data = JSON.parse(event.data) as Record<string, unknown>;
+    } catch {
+      streamError = "AI 返回的数据格式不正确";
+      return;
+    }
+
+    if (event.event === "progress") {
+      onProgress(typeof data.message === "string" ? data.message : "正在生成");
+    }
+    if (event.event === "draft") {
+      finalDraft = data as AiDraft;
+    }
+    if (event.event === "error") {
+      streamError = typeof data.message === "string" && data.message.trim() ? data.message : "AI 生成失败";
+    }
+  }
 
   while (true) {
     const { done, value } = await reader.read();
@@ -542,23 +568,17 @@ async function streamGeneratePlan({
     buffer = parts.pop() ?? "";
 
     for (const part of parts) {
-      const event = parseSseEvent(part);
-      if (!event) {
-        continue;
-      }
-      const data = JSON.parse(event.data);
-      if (event.event === "progress") {
-        onProgress(data.message ?? "正在生成");
-      }
-      if (event.event === "draft") {
-        finalDraft = data as AiDraft;
-      }
-      if (event.event === "error") {
-        throw new Error(data.message ?? "AI 生成失败");
-      }
+      handleSsePart(part);
     }
   }
 
+  buffer += decoder.decode();
+  if (buffer.trim()) {
+    handleSsePart(buffer);
+  }
+  if (streamError) {
+    throw new Error(streamError);
+  }
   if (!finalDraft) {
     throw new Error("AI 没有返回计划草稿");
   }
