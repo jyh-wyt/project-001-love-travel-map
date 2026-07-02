@@ -1392,6 +1392,7 @@ p {
 }
 
 .ai-preview-period,
+.ai-memory-references,
 .ai-recommendations,
 .ai-reminders {
   border: 1px solid var(--line);
@@ -1401,6 +1402,7 @@ p {
 }
 
 .ai-preview-period strong,
+.ai-memory-references > strong,
 .ai-recommendations > strong,
 .ai-reminders > strong {
   display: block;
@@ -1409,6 +1411,47 @@ p {
 
 .ai-preview-period p {
   margin: 6px 0 0;
+}
+
+.ai-memory-references {
+  display: grid;
+  gap: 10px;
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+
+.ai-memory-references.muted {
+  background: var(--surface-soft);
+}
+
+.ai-memory-references p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.ai-memory-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-memory-item {
+  display: grid;
+  gap: 4px;
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.ai-memory-item span {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ai-memory-item p {
+  color: var(--ink);
+  font-size: 13px;
 }
 
 .ai-recommendations {

@@ -41,6 +41,15 @@ type AiDraft = {
   reminders: string[];
 };
 
+type TravelMemory = {
+  memoryId: string;
+  sourceType: string;
+  sourceId: number;
+  cityName: string;
+  content: string;
+  score: number;
+};
+
 type AiApplyResponse = {
   success: boolean;
   day: PlanDay;
@@ -69,6 +78,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
   const [notes, setNotes] = useState("");
   const [generateState, setGenerateState] = useState<GenerateState>("idle");
   const [progressMessages, setProgressMessages] = useState<string[]>([]);
+  const [referencedMemories, setReferencedMemories] = useState<TravelMemory[] | null>(null);
   const [draft, setDraft] = useState<AiDraft | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [regenerateChoiceOpen, setRegenerateChoiceOpen] = useState(false);
@@ -90,6 +100,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
     setNotes("");
     setGenerateState("idle");
     setProgressMessages([]);
+    setReferencedMemories(null);
     setDraft(null);
     setErrorMessage("");
     setRegenerateChoiceOpen(false);
@@ -143,6 +154,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
       setStep("preview");
       setGenerateState("generating");
       setProgressMessages([]);
+      setReferencedMemories(null);
       setErrorMessage("");
       setRegenerateChoiceOpen(false);
 
@@ -157,7 +169,8 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
         notes,
         regenerateMode: mode,
         sourceDraftId: draft?.draftId ?? null,
-        onProgress: (message) => setProgressMessages((current) => [...current, message])
+        onProgress: (message) => setProgressMessages((current) => [...current, message]),
+        onMemories: setReferencedMemories
       });
       setDraft(nextDraft);
       setGenerateState("done");
@@ -334,6 +347,8 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
                 </div>
               ) : null}
 
+              <AiMemoryReferences memories={referencedMemories} isGenerating={generateState === "generating"} />
+
               {draft && generateState === "done" ? <AiDraftPreview draft={draft} /> : null}
 
               {regenerateChoiceOpen ? (
@@ -464,6 +479,40 @@ function AiDraftPreview({ draft }: { draft: AiDraft }) {
   );
 }
 
+function AiMemoryReferences({ memories, isGenerating }: { memories: TravelMemory[] | null; isGenerating: boolean }) {
+  if (memories === null) {
+    return (
+      <section className="ai-memory-references muted">
+        <strong>{isGenerating ? "正在查找你们的旅行记忆" : "旅行记忆"}</strong>
+        <p>{isGenerating ? "AI 会先参考当前空间里的日记和计划，再生成这一天的安排。" : "还没有检索到可展示的记忆。"}</p>
+      </section>
+    );
+  }
+
+  if (memories.length === 0) {
+    return (
+      <section className="ai-memory-references">
+        <strong>这次没有匹配到历史记忆</strong>
+        <p>AI 会按你输入的地点、时间安排和天气信息来规划。</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="ai-memory-references">
+      <strong>已参考 {memories.length} 条旅行记忆</strong>
+      <div className="ai-memory-list">
+        {memories.slice(0, 3).map((memory) => (
+          <article className="ai-memory-item" key={memory.memoryId}>
+            <span>{formatMemorySource(memory)}</span>
+            <p>{trimMemoryContent(memory.content)}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function PreviewPeriod({ label, period }: { label: string; period: PeriodDraft }) {
   return (
     <section className="ai-preview-period">
@@ -484,7 +533,8 @@ async function streamGeneratePlan({
   notes,
   regenerateMode,
   sourceDraftId,
-  onProgress
+  onProgress,
+  onMemories
 }: {
   dayId: number;
   destination: string;
@@ -497,6 +547,7 @@ async function streamGeneratePlan({
   regenerateMode: RegenerateMode;
   sourceDraftId: number | null;
   onProgress: (message: string) => void;
+  onMemories: (memories: TravelMemory[]) => void;
 }) {
   const response = await fetch(`${API_BASE_URL}/api/ai/plan-days/${dayId}/generate-stream`, {
     method: "POST",
@@ -549,6 +600,9 @@ async function streamGeneratePlan({
     if (event.event === "progress") {
       onProgress(typeof data.message === "string" ? data.message : "正在生成");
     }
+    if (event.event === "memories") {
+      onMemories(parseTravelMemories(data.items));
+    }
     if (event.event === "draft") {
       finalDraft = data as AiDraft;
     }
@@ -583,6 +637,38 @@ async function streamGeneratePlan({
     throw new Error("AI 没有返回计划草稿");
   }
   return finalDraft;
+}
+
+function parseTravelMemories(value: unknown): TravelMemory[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+      const record = item as Record<string, unknown>;
+      return {
+        memoryId: typeof record.memoryId === "string" ? record.memoryId : `${record.sourceType ?? "memory"}-${record.sourceId ?? ""}`,
+        sourceType: typeof record.sourceType === "string" ? record.sourceType : "",
+        sourceId: typeof record.sourceId === "number" ? record.sourceId : 0,
+        cityName: typeof record.cityName === "string" ? record.cityName : "",
+        content: typeof record.content === "string" ? record.content : "",
+        score: typeof record.score === "number" ? record.score : 0
+      };
+    })
+    .filter((item): item is TravelMemory => Boolean(item && item.content.trim()));
+}
+
+function formatMemorySource(memory: TravelMemory) {
+  const source = memory.sourceType === "PLAN_DAY" ? "计划" : "日记";
+  return memory.cityName ? `${memory.cityName} · ${source}` : source;
+}
+
+function trimMemoryContent(content: string) {
+  const normalized = content.replace(/\s+/g, " ").trim();
+  return normalized.length > 72 ? `${normalized.slice(0, 72)}...` : normalized;
 }
 
 function parseSseEvent(chunk: string) {

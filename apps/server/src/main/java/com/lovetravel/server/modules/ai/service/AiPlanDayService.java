@@ -222,7 +222,9 @@ public class AiPlanDayService {
             payload.put("notes", request.getNotes() == null ? "" : request.getNotes());
             payload.put("regenerateMode", normalizeRegenerateMode(request.getRegenerateMode()));
             payload.put("sourceDraft", loadSourceDraftJson(request.getSourceDraftId(), space.getId()));
-            payload.put("travelMemories", memorySyncService.searchPlanMemoriesBestEffort(space.getId(), request));
+            List<Map<String, Object>> travelMemories = memorySyncService.searchPlanMemoriesBestEffort(space.getId(), request);
+            payload.put("travelMemories", travelMemories);
+            sendMemories(emitter, runId, travelMemories);
 
             HttpRequest pythonRequest = HttpRequest.newBuilder()
                     .uri(URI.create(aiServiceBaseUrl + "/internal/ai/plan-day/generate-stream"))
@@ -292,6 +294,12 @@ public class AiPlanDayService {
             markRunFailed(runId, event.data);
             emitter.send(SseEmitter.event().name("error").data(event.data));
         }
+    }
+
+    private void sendMemories(SseEmitter emitter, String runId, List<Map<String, Object>> travelMemories) throws IOException {
+        String data = toJson(Map.of("items", travelMemories));
+        recordEvent(runId, "MEMORIES", travelMemories.isEmpty() ? "AI 未检索到历史记忆" : "AI 已检索到历史记忆", data);
+        emitter.send(SseEmitter.event().name("memories").data(data));
     }
 
     private String saveDraftAndEnrichEvent(String runId, Long userId, CoupleSpace space, TravelPlanDay day, String data) {
