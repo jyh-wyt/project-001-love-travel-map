@@ -96,13 +96,26 @@ public class AiPlanDayService {
 
     @Transactional
     public SseEmitter generatePlanDay(Long userId, Long dayId, AiPlanDayGenerateRequest request) {
-        CoupleSpace space = spaceService.requireEditableActiveSpace(userId);
-        TravelPlanDay day = requirePlanDay(dayId, space.getId());
-        validateRequest(request);
-        ensureShortWindowRateLimit(userId);
-        ensureQuota(userId);
-        acquireGenerateLock(userId, dayId);
-        memorySyncService.syncSpaceMemoriesBestEffort(space.getId());
+        SseEmitter emitter = new SseEmitter(180_000L);
+        CoupleSpace space;
+        TravelPlanDay day;
+        boolean lockAcquired = false;
+        try {
+            space = spaceService.requireEditableActiveSpace(userId);
+            day = requirePlanDay(dayId, space.getId());
+            validateRequest(request);
+            ensureShortWindowRateLimit(userId);
+            ensureQuota(userId);
+            acquireGenerateLock(userId, dayId);
+            lockAcquired = true;
+            memorySyncService.syncSpaceMemoriesBestEffort(space.getId());
+        } catch (ApiException exception) {
+            if (lockAcquired) {
+                releaseGenerateLock(userId, dayId);
+            }
+            sendError(emitter, exception.getMessage());
+            return emitter;
+        }
 
         try {
             String runId = "ai_run_" + UUID.randomUUID().toString().replace("-", "");
@@ -135,7 +148,6 @@ public class AiPlanDayService {
             run.setDeleted(0);
             runMapper.insert(run);
 
-            SseEmitter emitter = new SseEmitter(180_000L);
             SSE_EXECUTOR.execute(() -> streamFromPython(emitter, runId, userId, space, day, request));
             return emitter;
         } catch (RuntimeException exception) {
