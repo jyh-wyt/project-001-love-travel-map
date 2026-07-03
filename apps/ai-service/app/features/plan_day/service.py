@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Dict, Generator
+from typing import Dict, Generator, Iterable, Union
 
 import dashscope
 from langchain_core.prompts import PromptTemplate
@@ -60,13 +60,20 @@ def stream_plan_day(request: PlanDayGenerateRequest) -> Generator[str, None, Non
     yield sse_event("progress", {"step": "GENERATE_PLAN", "message": "正在安排上午、下午和晚上"})
 
     try:
-        draft = _generate_with_qwen(request, weather.to_dict())
+        draft = None
+        for event in _stream_generate_with_qwen(request, weather.to_dict()):
+            if isinstance(event, PlanDayDraft):
+                draft = event
+            else:
+                yield event
+        if draft is None:
+            raise RuntimeError("AI 没有返回计划草稿")
         yield sse_event("draft", draft.to_dict())
     except Exception as exc:
         yield sse_event("error", {"message": str(exc) or "AI 生成失败"})
 
 
-def _generate_with_qwen(request: PlanDayGenerateRequest, weather: Dict) -> PlanDayDraft:
+def _stream_generate_with_qwen(request: PlanDayGenerateRequest, weather: Dict) -> Generator[Union[str, PlanDayDraft], None, None]:
     if not settings.aliyun_dashscope_api_key:
         raise RuntimeError("ALIYUN_DASHSCOPE_API_KEY is not configured")
 
@@ -82,10 +89,10 @@ def _generate_with_qwen(request: PlanDayGenerateRequest, weather: Dict) -> PlanD
         regenerate_mode=request.regenerate_mode,
         source_draft=request.source_draft or "",
         weather=json.dumps(weather, ensure_ascii=False),
-        travel_memories=json.dumps(request.travel_memories[:5], ensure_ascii=False),
+        travel_memories=json.dumps(request.travel_memories[:3], ensure_ascii=False),
     )
 
-    response = dashscope.Generation.call(
+    stream = dashscope.Generation.call(
         api_key=settings.aliyun_dashscope_api_key,
         model=settings.qwen_model_name,
         messages=[
@@ -93,13 +100,39 @@ def _generate_with_qwen(request: PlanDayGenerateRequest, weather: Dict) -> PlanD
             {"role": "user", "content": prompt},
         ],
         result_format="message",
+        stream=True,
+        incremental_output=True,
     )
-    if getattr(response, "status_code", 200) != 200:
-        raise RuntimeError(getattr(response, "message", "Qwen model call failed"))
 
-    content = response.output.choices[0].message.content
+    content_parts = []
+    for chunk in _iter_dashscope_stream(stream):
+        if getattr(chunk, "status_code", 200) != 200:
+            raise RuntimeError(getattr(chunk, "message", "Qwen model call failed"))
+        delta = _extract_message_content(chunk)
+        if not delta:
+            continue
+        content_parts.append(delta)
+        yield sse_event("draft-delta", {"text": delta})
+
+    content = "".join(content_parts)
     parsed = json.loads(_strip_code_fence(content))
-    return PlanDayDraft(**parsed)
+    yield PlanDayDraft(**parsed)
+
+
+def _iter_dashscope_stream(stream) -> Iterable:
+    if isinstance(stream, (str, bytes)):
+        return []
+    try:
+        return iter(stream)
+    except TypeError:
+        return iter([stream])
+
+
+def _extract_message_content(response) -> str:
+    try:
+        return response.output.choices[0].message.content or ""
+    except (AttributeError, IndexError, TypeError):
+        return ""
 
 
 def _strip_code_fence(content: str) -> str:

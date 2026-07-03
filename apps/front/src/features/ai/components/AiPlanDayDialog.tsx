@@ -95,6 +95,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
   const [notes, setNotes] = useState("");
   const [generateState, setGenerateState] = useState<GenerateState>("idle");
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>(initialAgentSteps);
+  const [streamingDraftText, setStreamingDraftText] = useState("");
   const [referencedMemories, setReferencedMemories] = useState<TravelMemory[] | null>(null);
   const [draft, setDraft] = useState<AiDraft | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
@@ -117,6 +118,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
     setNotes("");
     setGenerateState("idle");
     setAgentSteps(initialAgentSteps);
+    setStreamingDraftText("");
     setReferencedMemories(null);
     setDraft(null);
     setErrorMessage("");
@@ -171,6 +173,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
       setStep("preview");
       setGenerateState("generating");
       setAgentSteps(initialAgentSteps);
+      setStreamingDraftText("");
       setReferencedMemories(null);
       setErrorMessage("");
       setRegenerateChoiceOpen(false);
@@ -188,6 +191,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
         sourceDraftId: draft?.draftId ?? null,
         onProgress: (message) => updateAgentStep("PLAN_GENERATION", "running", message),
         onAgentStep: (agentStep) => updateAgentStep(agentStep.step, agentStep.status, agentStep.message),
+        onDraftDelta: (text) => setStreamingDraftText((current) => `${current}${text}`),
         onMemories: setReferencedMemories
       });
       setDraft(nextDraft);
@@ -374,6 +378,8 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
               <AiAgentTrace steps={agentSteps} />
 
               <AiMemoryReferences memories={referencedMemories} isGenerating={generateState === "generating"} />
+
+              {streamingDraftText && generateState === "generating" ? <AiStreamingDraft text={streamingDraftText} /> : null}
 
               {draft && generateState === "done" ? <AiDraftPreview draft={draft} /> : null}
 
@@ -565,6 +571,15 @@ function AiMemoryReferences({ memories, isGenerating }: { memories: TravelMemory
   );
 }
 
+function AiStreamingDraft({ text }: { text: string }) {
+  return (
+    <section className="ai-streaming-draft" aria-live="polite">
+      <strong>实时生成内容</strong>
+      <p>{formatStreamingDraftText(text)}</p>
+    </section>
+  );
+}
+
 function PreviewPeriod({ label, period }: { label: string; period: PeriodDraft }) {
   return (
     <section className="ai-preview-period">
@@ -587,6 +602,7 @@ async function streamGeneratePlan({
   sourceDraftId,
   onProgress,
   onAgentStep,
+  onDraftDelta,
   onMemories
 }: {
   dayId: number;
@@ -601,6 +617,7 @@ async function streamGeneratePlan({
   sourceDraftId: number | null;
   onProgress: (message: string) => void;
   onAgentStep: (step: Pick<AgentStep, "step" | "status" | "message">) => void;
+  onDraftDelta: (text: string) => void;
   onMemories: (memories: TravelMemory[]) => void;
 }) {
   const response = await fetch(`${API_BASE_URL}/api/ai/plan-days/${dayId}/generate-stream`, {
@@ -658,6 +675,12 @@ async function streamGeneratePlan({
       const agentStep = parseAgentStep(data);
       if (agentStep) {
         onAgentStep(agentStep);
+      }
+    }
+    if (event.event === "draft-delta") {
+      const text = typeof data.text === "string" ? data.text : "";
+      if (text) {
+        onDraftDelta(text);
       }
     }
     if (event.event === "memories") {
@@ -747,6 +770,10 @@ function formatMemorySource(memory: TravelMemory) {
 function trimMemoryContent(content: string) {
   const normalized = content.replace(/\s+/g, " ").trim();
   return normalized.length > 72 ? `${normalized.slice(0, 72)}...` : normalized;
+}
+
+function formatStreamingDraftText(content: string) {
+  return content.replace(/[{}\[\]",]/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function parseSseEvent(chunk: string) {

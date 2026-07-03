@@ -296,6 +296,11 @@ public class AiPlanDayService {
             emitter.send(SseEmitter.event().name("progress").data(event.data));
             return;
         }
+        if ("draft-delta".equals(event.event)) {
+            recordEvent(runId, "DRAFT_DELTA", "AI 正在流式生成计划内容", event.data);
+            emitter.send(SseEmitter.event().name("draft-delta").data(event.data));
+            return;
+        }
         if ("draft".equals(event.event)) {
             sendAgentStep(emitter, runId, "PLAN_GENERATION", "done", "大模型已返回计划草稿");
             String data = saveDraftAndEnrichEvent(runId, userId, space, day, event.data);
