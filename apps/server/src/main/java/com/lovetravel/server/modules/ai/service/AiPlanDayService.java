@@ -40,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import com.lovetravel.server.modules.ai.vo.AiPlanDayApplyResponse;
 import com.lovetravel.server.modules.ai.dto.AiPlanDayGenerateRequest;
+import com.lovetravel.server.modules.ai.service.AiTravelMemorySyncService.SyncResult;
 
 @Service
 public class AiPlanDayService {
@@ -99,6 +100,7 @@ public class AiPlanDayService {
         SseEmitter emitter = new SseEmitter(180_000L);
         CoupleSpace space;
         TravelPlanDay day;
+        SyncResult memorySyncResult;
         boolean lockAcquired = false;
         try {
             space = spaceService.requireEditableActiveSpace(userId);
@@ -108,7 +110,7 @@ public class AiPlanDayService {
             ensureQuota(userId);
             acquireGenerateLock(userId, dayId);
             lockAcquired = true;
-            memorySyncService.syncSpaceMemoriesBestEffort(space.getId());
+            memorySyncResult = memorySyncService.syncSpaceMemoriesBestEffort(space.getId());
         } catch (ApiException exception) {
             if (lockAcquired) {
                 releaseGenerateLock(userId, dayId);
@@ -148,7 +150,7 @@ public class AiPlanDayService {
             run.setDeleted(0);
             runMapper.insert(run);
 
-            SSE_EXECUTOR.execute(() -> streamFromPython(emitter, runId, userId, space, day, request));
+            SSE_EXECUTOR.execute(() -> streamFromPython(emitter, runId, userId, space, day, request, memorySyncResult));
             return emitter;
         } catch (RuntimeException exception) {
             releaseGenerateLock(userId, dayId);
@@ -202,9 +204,14 @@ public class AiPlanDayService {
         }
     }
 
-    private void streamFromPython(SseEmitter emitter, String runId, Long userId, CoupleSpace space, TravelPlanDay day, AiPlanDayGenerateRequest request) {
+    private void streamFromPython(SseEmitter emitter, String runId, Long userId, CoupleSpace space, TravelPlanDay day, AiPlanDayGenerateRequest request, SyncResult memorySyncResult) {
         long startedAt = System.currentTimeMillis();
         try {
+            sendAgentStep(emitter, runId, "MEMORY_SYNC", memorySyncResult.success() ? "done" : "skipped",
+                    memorySyncResult.success()
+                            ? "已同步旅行记忆：" + memorySyncResult.changedCount() + " 条更新，" + memorySyncResult.skippedCount() + " 条跳过"
+                            : "旅行记忆同步暂时不可用，继续生成计划");
+
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("requestId", runId);
             payload.put("spaceId", space.getId());
@@ -222,9 +229,13 @@ public class AiPlanDayService {
             payload.put("notes", request.getNotes() == null ? "" : request.getNotes());
             payload.put("regenerateMode", normalizeRegenerateMode(request.getRegenerateMode()));
             payload.put("sourceDraft", loadSourceDraftJson(request.getSourceDraftId(), space.getId()));
+            sendAgentStep(emitter, runId, "MEMORY_RETRIEVAL", "running", "正在从向量库检索相关旅行记忆");
             List<Map<String, Object>> travelMemories = memorySyncService.searchPlanMemoriesBestEffort(space.getId(), request);
             payload.put("travelMemories", travelMemories);
+            sendAgentStep(emitter, runId, "MEMORY_RETRIEVAL", travelMemories.isEmpty() ? "skipped" : "done",
+                    travelMemories.isEmpty() ? "没有匹配到可参考的历史记忆" : "已检索到 " + travelMemories.size() + " 条相关旅行记忆");
             sendMemories(emitter, runId, travelMemories);
+            sendAgentStep(emitter, runId, "PLAN_GENERATION", "running", "正在调用大模型生成当天计划");
 
             HttpRequest pythonRequest = HttpRequest.newBuilder()
                     .uri(URI.create(aiServiceBaseUrl + "/internal/ai/plan-day/generate-stream"))
@@ -286,12 +297,15 @@ public class AiPlanDayService {
             return;
         }
         if ("draft".equals(event.event)) {
+            sendAgentStep(emitter, runId, "PLAN_GENERATION", "done", "大模型已返回计划草稿");
             String data = saveDraftAndEnrichEvent(runId, userId, space, day, event.data);
+            sendAgentStep(emitter, runId, "DRAFT_SAVE", "done", "AI 草稿已保存，可以应用到这一天");
             emitter.send(SseEmitter.event().name("draft").data(data));
             return;
         }
         if ("error".equals(event.event)) {
             markRunFailed(runId, event.data);
+            sendAgentStep(emitter, runId, "PLAN_GENERATION", "failed", "AI 生成失败，请稍后重试");
             emitter.send(SseEmitter.event().name("error").data(event.data));
         }
     }
@@ -300,6 +314,16 @@ public class AiPlanDayService {
         String data = toJson(Map.of("items", travelMemories));
         recordEvent(runId, "MEMORIES", travelMemories.isEmpty() ? "AI 未检索到历史记忆" : "AI 已检索到历史记忆", data);
         emitter.send(SseEmitter.event().name("memories").data(data));
+    }
+
+    private void sendAgentStep(SseEmitter emitter, String runId, String step, String status, String message) throws IOException {
+        String data = toJson(Map.of(
+                "step", step,
+                "status", status,
+                "message", message
+        ));
+        recordEvent(runId, "AGENT_STEP", message, data);
+        emitter.send(SseEmitter.event().name("agent-step").data(data));
     }
 
     private String saveDraftAndEnrichEvent(String runId, Long userId, CoupleSpace space, TravelPlanDay day, String data) {

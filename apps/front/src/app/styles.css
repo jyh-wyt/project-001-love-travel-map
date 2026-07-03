@@ -1380,6 +1380,94 @@ p {
   background: var(--accent);
 }
 
+.ai-agent-trace {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  padding: 14px;
+}
+
+.ai-agent-trace-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ai-agent-trace-header strong {
+  color: var(--ink);
+}
+
+.ai-agent-trace-header span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ai-agent-step-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-agent-step {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 10px 11px;
+}
+
+.ai-agent-step-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  margin-top: 4px;
+}
+
+.ai-agent-step strong {
+  display: block;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.ai-agent-step p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ai-agent-step.running {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+
+.ai-agent-step.running .ai-agent-step-dot {
+  background: var(--accent);
+}
+
+.ai-agent-step.done .ai-agent-step-dot {
+  background: #166534;
+}
+
+.ai-agent-step.skipped {
+  background: color-mix(in srgb, var(--surface-soft) 65%, var(--surface));
+}
+
+.ai-agent-step.failed {
+  border-color: color-mix(in srgb, #b42318 38%, var(--line));
+}
+
+.ai-agent-step.failed .ai-agent-step-dot {
+  background: #b42318;
+}
+
 .ai-draft-preview {
   display: grid;
   gap: 14px;

@@ -17,6 +17,8 @@ type PeriodMode = "PLAY" | "REST";
 type Step = "places" | "time" | "preview";
 type GenerateState = "idle" | "generating" | "done";
 type RegenerateMode = "NEW" | "REVISE" | "REWRITE";
+type AgentStepKey = "MEMORY_SYNC" | "MEMORY_RETRIEVAL" | "PLAN_GENERATION" | "DRAFT_SAVE";
+type AgentStepStatus = "pending" | "running" | "done" | "skipped" | "failed";
 
 type PeriodDraft = {
   mode: PeriodMode;
@@ -50,6 +52,13 @@ type TravelMemory = {
   score: number;
 };
 
+type AgentStep = {
+  step: AgentStepKey;
+  label: string;
+  status: AgentStepStatus;
+  message: string;
+};
+
 type AiApplyResponse = {
   success: boolean;
   day: PlanDay;
@@ -67,6 +76,13 @@ const modeItems = [
   { id: "REST", label: "酒店休息", description: "保留轻松休息时间" }
 ];
 
+const initialAgentSteps: AgentStep[] = [
+  { step: "MEMORY_SYNC", label: "准备记忆", status: "pending", message: "等待同步日记和计划" },
+  { step: "MEMORY_RETRIEVAL", label: "检索记忆", status: "pending", message: "等待向量库检索" },
+  { step: "PLAN_GENERATION", label: "生成方案", status: "pending", message: "等待大模型生成" },
+  { step: "DRAFT_SAVE", label: "保存草稿", status: "pending", message: "等待保存 AI 草稿" }
+];
+
 export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDialogProps) {
   const [step, setStep] = useState<Step>("places");
   const [places, setPlaces] = useState<string[]>([]);
@@ -77,7 +93,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
   const [eveningMode, setEveningMode] = useState<PeriodMode>("REST");
   const [notes, setNotes] = useState("");
   const [generateState, setGenerateState] = useState<GenerateState>("idle");
-  const [progressMessages, setProgressMessages] = useState<string[]>([]);
+  const [agentSteps, setAgentSteps] = useState<AgentStep[]>(initialAgentSteps);
   const [referencedMemories, setReferencedMemories] = useState<TravelMemory[] | null>(null);
   const [draft, setDraft] = useState<AiDraft | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
@@ -99,7 +115,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
     setEveningMode("REST");
     setNotes("");
     setGenerateState("idle");
-    setProgressMessages([]);
+    setAgentSteps(initialAgentSteps);
     setReferencedMemories(null);
     setDraft(null);
     setErrorMessage("");
@@ -153,7 +169,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
     try {
       setStep("preview");
       setGenerateState("generating");
-      setProgressMessages([]);
+      setAgentSteps(initialAgentSteps);
       setReferencedMemories(null);
       setErrorMessage("");
       setRegenerateChoiceOpen(false);
@@ -169,7 +185,8 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
         notes,
         regenerateMode: mode,
         sourceDraftId: draft?.draftId ?? null,
-        onProgress: (message) => setProgressMessages((current) => [...current, message]),
+        onProgress: (message) => updateAgentStep("PLAN_GENERATION", "running", message),
+        onAgentStep: (agentStep) => updateAgentStep(agentStep.step, agentStep.status, agentStep.message),
         onMemories: setReferencedMemories
       });
       setDraft(nextDraft);
@@ -214,6 +231,20 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
   function inferDestination() {
     const firstPlace = places[0]?.trim();
     return firstPlace || "当前目的地";
+  }
+
+  function updateAgentStep(step: AgentStepKey, status: AgentStepStatus, message: string) {
+    setAgentSteps((current) =>
+      current.map((item) =>
+        item.step === step
+          ? {
+              ...item,
+              status,
+              message
+            }
+          : item
+      )
+    );
   }
 
   return (
@@ -339,13 +370,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
 
           {step === "preview" ? (
             <div className="ai-preview-section">
-              {generateState === "generating" ? (
-                <div className="ai-progress-list" aria-live="polite">
-                  {progressMessages.map((message) => (
-                    <span key={message}>{message}</span>
-                  ))}
-                </div>
-              ) : null}
+              <AiAgentTrace steps={agentSteps} />
 
               <AiMemoryReferences memories={referencedMemories} isGenerating={generateState === "generating"} />
 
@@ -445,6 +470,28 @@ function PeriodModeGroup({
   );
 }
 
+function AiAgentTrace({ steps }: { steps: AgentStep[] }) {
+  return (
+    <section className="ai-agent-trace" aria-label="AI 执行轨迹">
+      <div className="ai-agent-trace-header">
+        <strong>AI 执行轨迹</strong>
+        <span>Agent 正在按步骤处理</span>
+      </div>
+      <div className="ai-agent-step-list">
+        {steps.map((step) => (
+          <article className={`ai-agent-step ${step.status}`} key={step.step}>
+            <span className="ai-agent-step-dot" aria-hidden="true" />
+            <div>
+              <strong>{step.label}</strong>
+              <p>{step.message}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function AiDraftPreview({ draft }: { draft: AiDraft }) {
   return (
     <div className="ai-draft-preview">
@@ -534,6 +581,7 @@ async function streamGeneratePlan({
   regenerateMode,
   sourceDraftId,
   onProgress,
+  onAgentStep,
   onMemories
 }: {
   dayId: number;
@@ -547,6 +595,7 @@ async function streamGeneratePlan({
   regenerateMode: RegenerateMode;
   sourceDraftId: number | null;
   onProgress: (message: string) => void;
+  onAgentStep: (step: Pick<AgentStep, "step" | "status" | "message">) => void;
   onMemories: (memories: TravelMemory[]) => void;
 }) {
   const response = await fetch(`${API_BASE_URL}/api/ai/plan-days/${dayId}/generate-stream`, {
@@ -600,6 +649,12 @@ async function streamGeneratePlan({
     if (event.event === "progress") {
       onProgress(typeof data.message === "string" ? data.message : "正在生成");
     }
+    if (event.event === "agent-step") {
+      const agentStep = parseAgentStep(data);
+      if (agentStep) {
+        onAgentStep(agentStep);
+      }
+    }
     if (event.event === "memories") {
       onMemories(parseTravelMemories(data.items));
     }
@@ -637,6 +692,24 @@ async function streamGeneratePlan({
     throw new Error("AI 没有返回计划草稿");
   }
   return finalDraft;
+}
+
+function parseAgentStep(value: Record<string, unknown>): Pick<AgentStep, "step" | "status" | "message"> | null {
+  const step = typeof value.step === "string" ? value.step : "";
+  const status = typeof value.status === "string" ? value.status : "";
+  const message = typeof value.message === "string" ? value.message : "";
+  if (!isAgentStepKey(step) || !isAgentStepStatus(status) || !message.trim()) {
+    return null;
+  }
+  return { step, status, message };
+}
+
+function isAgentStepKey(value: string): value is AgentStepKey {
+  return ["MEMORY_SYNC", "MEMORY_RETRIEVAL", "PLAN_GENERATION", "DRAFT_SAVE"].includes(value);
+}
+
+function isAgentStepStatus(value: string): value is AgentStepStatus {
+  return ["pending", "running", "done", "skipped", "failed"].includes(value);
 }
 
 function parseTravelMemories(value: unknown): TravelMemory[] {
