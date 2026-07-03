@@ -270,13 +270,13 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
           <StepPill active={step === "preview"} done={generateState === "done"} label="预览" />
         </div>
 
-        {errorMessage ? (
-          <div className="ai-dialog-feedback">
-            <p className="plan-feedback error">{errorMessage}</p>
-          </div>
-        ) : null}
-
         <div className="ai-dialog-body">
+          {errorMessage ? (
+            <div className="ai-dialog-feedback">
+              <p className="plan-feedback error">{errorMessage}</p>
+            </div>
+          ) : null}
+
           {step === "places" ? (
             <div className="ai-form-section">
               <label className="field-label">

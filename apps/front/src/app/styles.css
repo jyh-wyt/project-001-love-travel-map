@@ -1097,12 +1097,11 @@ p {
 }
 
 .ai-dialog-feedback {
-  border-bottom: 1px solid var(--line);
-  padding: 12px 22px 0;
+  padding: 0 0 14px;
 }
 
 .ai-dialog-feedback .plan-feedback {
-  margin: 0 0 12px;
+  margin: 0;
 }
 
 .ai-kicker {
