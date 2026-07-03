@@ -33,6 +33,7 @@ import org.springframework.stereotype.Service;
 public class AiTravelMemorySyncService {
 
     private static final Logger log = LoggerFactory.getLogger(AiTravelMemorySyncService.class);
+    private static final int PLAN_MEMORY_TOP_K = 3;
 
     private final TripPostMapper tripPostMapper;
     private final TripMapper tripMapper;
@@ -181,7 +182,7 @@ public class AiTravelMemorySyncService {
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("spaceId", spaceId);
             payload.put("query", query);
-            payload.put("topK", 5);
+            payload.put("topK", PLAN_MEMORY_TOP_K);
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(aiServiceBaseUrl + "/internal/ai/memories/search"))
                     .timeout(Duration.ofSeconds(20))

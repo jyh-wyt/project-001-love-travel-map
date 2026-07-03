@@ -1516,6 +1516,10 @@ p {
   line-height: 1.6;
 }
 
+.ai-memory-limit-note {
+  font-size: 12px;
+}
+
 .ai-memory-list {
   display: grid;
   gap: 8px;

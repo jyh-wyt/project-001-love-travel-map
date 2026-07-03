@@ -82,6 +82,7 @@ const initialAgentSteps: AgentStep[] = [
   { step: "PLAN_GENERATION", label: "生成方案", status: "pending", message: "等待大模型生成" },
   { step: "DRAFT_SAVE", label: "保存草稿", status: "pending", message: "等待保存 AI 草稿" }
 ];
+const visibleMemoryLimit = 3;
 
 export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDialogProps) {
   const [step, setStep] = useState<Step>("places");
@@ -545,11 +546,15 @@ function AiMemoryReferences({ memories, isGenerating }: { memories: TravelMemory
     );
   }
 
+  const visibleMemories = memories.slice(0, visibleMemoryLimit);
+  const hiddenCount = memories.length - visibleMemories.length;
+
   return (
     <section className="ai-memory-references">
       <strong>已参考 {memories.length} 条旅行记忆</strong>
+      {hiddenCount > 0 ? <p className="ai-memory-limit-note">仅展示最相关的前 {visibleMemoryLimit} 条，另外 {hiddenCount} 条已用于 AI 判断。</p> : null}
       <div className="ai-memory-list">
-        {memories.slice(0, 3).map((memory) => (
+        {visibleMemories.map((memory) => (
           <article className="ai-memory-item" key={memory.memoryId}>
             <span>{formatMemorySource(memory)}</span>
             <p>{trimMemoryContent(memory.content)}</p>

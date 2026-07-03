@@ -365,7 +365,10 @@ public class AiPlanDayService {
     private void ensureQuota(Long userId) {
         AppUser user = appUserMapper.selectById(userId);
         String memberLevel = user == null || user.getMemberLevel() == null ? "FREE" : user.getMemberLevel();
-        int limit = "VIP".equalsIgnoreCase(memberLevel) || "ADMIN".equalsIgnoreCase(memberLevel) ? 20 : 3;
+        if ("ADMIN".equalsIgnoreCase(memberLevel)) {
+            return;
+        }
+        int limit = "VIP".equalsIgnoreCase(memberLevel) ? 20 : 3;
         LocalDateTime since = LocalDateTime.now().minusDays(30);
         Long used = runMapper.selectCount(new LambdaQueryWrapper<AiAgentRun>()
                 .eq(AiAgentRun::getUserId, userId)
