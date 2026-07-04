@@ -52,6 +52,12 @@ type TravelMemory = {
   score: number;
 };
 
+type MemoryReferenceState = {
+  success: boolean;
+  items: TravelMemory[];
+  errorMessage: string;
+};
+
 type AgentStep = {
   step: AgentStepKey;
   label: string;
@@ -96,7 +102,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
   const [generateState, setGenerateState] = useState<GenerateState>("idle");
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>(initialAgentSteps);
   const [streamingDraftText, setStreamingDraftText] = useState("");
-  const [referencedMemories, setReferencedMemories] = useState<TravelMemory[] | null>(null);
+  const [referencedMemories, setReferencedMemories] = useState<MemoryReferenceState | null>(null);
   const [draft, setDraft] = useState<AiDraft | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [regenerateChoiceOpen, setRegenerateChoiceOpen] = useState(false);
@@ -533,7 +539,7 @@ function AiDraftPreview({ draft }: { draft: AiDraft }) {
   );
 }
 
-function AiMemoryReferences({ memories, isGenerating }: { memories: TravelMemory[] | null; isGenerating: boolean }) {
+function AiMemoryReferences({ memories, isGenerating }: { memories: MemoryReferenceState | null; isGenerating: boolean }) {
   if (memories === null) {
     return (
       <section className="ai-memory-references muted">
@@ -543,21 +549,30 @@ function AiMemoryReferences({ memories, isGenerating }: { memories: TravelMemory
     );
   }
 
-  if (memories.length === 0) {
+  if (!memories.success) {
+    return (
+      <section className="ai-memory-references warning">
+        <strong>记忆检索暂时不可用</strong>
+        <p>{memories.errorMessage || "本次将不参考历史记忆，但 AI 会继续根据你输入的地点和时间安排生成计划。"}</p>
+      </section>
+    );
+  }
+
+  if (memories.items.length === 0) {
     return (
       <section className="ai-memory-references">
-        <strong>这次没有匹配到历史记忆</strong>
+        <strong>这次没有匹配到可参考的历史记忆</strong>
         <p>AI 会按你输入的地点、时间安排和天气信息来规划。</p>
       </section>
     );
   }
 
-  const visibleMemories = memories.slice(0, visibleMemoryLimit);
-  const hiddenCount = memories.length - visibleMemories.length;
+  const visibleMemories = memories.items.slice(0, visibleMemoryLimit);
+  const hiddenCount = memories.items.length - visibleMemories.length;
 
   return (
     <section className="ai-memory-references">
-      <strong>已参考 {memories.length} 条旅行记忆</strong>
+      <strong>已参考 {memories.items.length} 条旅行记忆</strong>
       {hiddenCount > 0 ? <p className="ai-memory-limit-note">仅展示最相关的前 {visibleMemoryLimit} 条，另外 {hiddenCount} 条已用于 AI 判断。</p> : null}
       <div className="ai-memory-list">
         {visibleMemories.map((memory) => (
@@ -618,7 +633,7 @@ async function streamGeneratePlan({
   onProgress: (message: string) => void;
   onAgentStep: (step: Pick<AgentStep, "step" | "status" | "message">) => void;
   onDraftDelta: (text: string) => void;
-  onMemories: (memories: TravelMemory[]) => void;
+  onMemories: (memories: MemoryReferenceState) => void;
 }) {
   const response = await fetch(`${API_BASE_URL}/api/ai/plan-days/${dayId}/generate-stream`, {
     method: "POST",
@@ -685,7 +700,7 @@ async function streamGeneratePlan({
       }
     }
     if (event.event === "memories") {
-      onMemories(parseTravelMemories(data.items));
+      onMemories(parseMemoryReferenceState(data));
     }
     if (event.event === "draft") {
       finalDraft = data as AiDraft;
@@ -750,6 +765,16 @@ function isAgentStepKey(value: string): value is AgentStepKey {
 
 function isAgentStepStatus(value: string): value is AgentStepStatus {
   return ["pending", "running", "done", "skipped", "failed"].includes(value);
+}
+
+function parseMemoryReferenceState(value: Record<string, unknown>): MemoryReferenceState {
+  const success = typeof value.success === "boolean" ? value.success : true;
+  const errorMessage = typeof value.errorMessage === "string" ? value.errorMessage : "";
+  return {
+    success,
+    items: parseTravelMemories(value.items),
+    errorMessage
+  };
 }
 
 function parseTravelMemories(value: unknown): TravelMemory[] {

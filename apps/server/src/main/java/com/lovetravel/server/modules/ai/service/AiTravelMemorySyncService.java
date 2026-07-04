@@ -74,7 +74,7 @@ public class AiTravelMemorySyncService {
         }
     }
 
-    public List<Map<String, Object>> searchPlanMemoriesBestEffort(Long spaceId, AiPlanDayGenerateRequest request) {
+    public MemorySearchResult searchPlanMemoriesBestEffort(Long spaceId, AiPlanDayGenerateRequest request) {
         try {
             String query = documentFactory.buildPlanSearchQuery(
                     request.getDestination(),
@@ -82,12 +82,12 @@ public class AiTravelMemorySyncService {
                     request.getMustVisitPlaces(),
                     request.getNotes());
             if (query.isBlank()) {
-                return List.of();
+                return new MemorySearchResult(true, List.of(), "");
             }
-            return callPythonSearch(spaceId, query);
+            return new MemorySearchResult(true, callPythonSearch(spaceId, query), "");
         } catch (Exception exception) {
             log.warn("AI memory search skipped for spaceId={}: {}", spaceId, exception.getMessage());
-            return List.of();
+            return new MemorySearchResult(false, List.of(), "记忆检索暂时不可用，本次将不参考历史记忆");
         }
     }
 
@@ -263,5 +263,8 @@ public class AiTravelMemorySyncService {
     }
 
     public record SyncResult(int changedCount, int skippedCount, boolean success) {
+    }
+
+    public record MemorySearchResult(boolean success, List<Map<String, Object>> memories, String errorMessage) {
     }
 }

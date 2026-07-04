@@ -41,6 +41,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import com.lovetravel.server.modules.ai.vo.AiPlanDayApplyResponse;
 import com.lovetravel.server.modules.ai.dto.AiPlanDayGenerateRequest;
 import com.lovetravel.server.modules.ai.service.AiTravelMemorySyncService.SyncResult;
+import com.lovetravel.server.modules.ai.service.AiTravelMemorySyncService.MemorySearchResult;
 
 @Service
 public class AiPlanDayService {
@@ -230,11 +231,12 @@ public class AiPlanDayService {
             payload.put("regenerateMode", normalizeRegenerateMode(request.getRegenerateMode()));
             payload.put("sourceDraft", loadSourceDraftJson(request.getSourceDraftId(), space.getId()));
             sendAgentStep(emitter, runId, "MEMORY_RETRIEVAL", "running", "正在从向量库检索相关旅行记忆");
-            List<Map<String, Object>> travelMemories = memorySyncService.searchPlanMemoriesBestEffort(space.getId(), request);
+            MemorySearchResult memorySearchResult = memorySyncService.searchPlanMemoriesBestEffort(space.getId(), request);
+            List<Map<String, Object>> travelMemories = memorySearchResult.memories();
             payload.put("travelMemories", travelMemories);
-            sendAgentStep(emitter, runId, "MEMORY_RETRIEVAL", travelMemories.isEmpty() ? "skipped" : "done",
-                    travelMemories.isEmpty() ? "没有匹配到可参考的历史记忆" : "已检索到 " + travelMemories.size() + " 条相关旅行记忆");
-            sendMemories(emitter, runId, travelMemories);
+            sendAgentStep(emitter, runId, "MEMORY_RETRIEVAL", memoryRetrievalStatus(memorySearchResult),
+                    memoryRetrievalMessage(memorySearchResult));
+            sendMemories(emitter, runId, memorySearchResult);
             sendAgentStep(emitter, runId, "PLAN_GENERATION", "running", "正在调用大模型生成当天计划");
 
             HttpRequest pythonRequest = HttpRequest.newBuilder()
@@ -315,10 +317,34 @@ public class AiPlanDayService {
         }
     }
 
-    private void sendMemories(SseEmitter emitter, String runId, List<Map<String, Object>> travelMemories) throws IOException {
-        String data = toJson(Map.of("items", travelMemories));
-        recordEvent(runId, "MEMORIES", travelMemories.isEmpty() ? "AI 未检索到历史记忆" : "AI 已检索到历史记忆", data);
+    private void sendMemories(SseEmitter emitter, String runId, MemorySearchResult memorySearchResult) throws IOException {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("success", memorySearchResult.success());
+        payload.put("items", memorySearchResult.memories());
+        payload.put("errorMessage", memorySearchResult.errorMessage() == null ? "" : memorySearchResult.errorMessage());
+        String data = toJson(payload);
+        recordEvent(runId, "MEMORIES", memorySearchResult.success()
+                ? (memorySearchResult.memories().isEmpty() ? "AI 未检索到历史记忆" : "AI 已检索到历史记忆")
+                : "AI 记忆检索暂时不可用", data);
         emitter.send(SseEmitter.event().name("memories").data(data));
+    }
+
+    private String memoryRetrievalStatus(MemorySearchResult memorySearchResult) {
+        if (!memorySearchResult.success()) {
+            return "failed";
+        }
+        return memorySearchResult.memories().isEmpty() ? "skipped" : "done";
+    }
+
+    private String memoryRetrievalMessage(MemorySearchResult memorySearchResult) {
+        if (!memorySearchResult.success()) {
+            return memorySearchResult.errorMessage() == null || memorySearchResult.errorMessage().isBlank()
+                    ? "记忆检索暂时不可用，本次将不参考历史记忆"
+                    : memorySearchResult.errorMessage();
+        }
+        return memorySearchResult.memories().isEmpty()
+                ? "没有匹配到可参考的历史记忆"
+                : "已检索到 " + memorySearchResult.memories().size() + " 条相关旅行记忆";
     }
 
     private void sendAgentStep(SseEmitter emitter, String runId, String step, String status, String message) throws IOException {
