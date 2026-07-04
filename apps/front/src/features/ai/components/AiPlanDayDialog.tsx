@@ -383,20 +383,6 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
 
               {draft && generateState === "done" ? <AiDraftPreview draft={draft} /> : null}
 
-              {regenerateChoiceOpen ? (
-                <div className="ai-regenerate-box">
-                  <strong>你想怎么重新生成？</strong>
-                  <p>两种方式都会消耗 1 次 AI 规划次数。</p>
-                  <div className="ai-regenerate-actions">
-                    <button className="secondary-button" onClick={() => void generatePlan("REVISE")} type="button">
-                      基于当前规划修改
-                    </button>
-                    <button className="secondary-button" onClick={() => void generatePlan("REWRITE")} type="button">
-                      彻底重写
-                    </button>
-                  </div>
-                </div>
-              ) : null}
             </div>
           ) : null}
         </div>
@@ -425,18 +411,32 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
           ) : null}
 
           {step === "preview" ? (
-            <>
-              <button className="secondary-button" disabled={generateState === "generating"} onClick={() => setRegenerateChoiceOpen(true)} type="button">
-                <RefreshCcw aria-hidden="true" size={16} />
-                重新生成
-              </button>
-              <button className="secondary-button" disabled={generateState === "generating"} onClick={() => void closeDialog()} type="button">
-                取消
-              </button>
-              <button className="primary-button" disabled={!draft || generateState === "generating"} onClick={() => void applyDraft()} type="button">
-                应用到这一天
-              </button>
-            </>
+            regenerateChoiceOpen ? (
+              <div className="ai-regenerate-actions">
+                <button className="secondary-button" disabled={generateState === "generating"} onClick={() => setRegenerateChoiceOpen(false)} type="button">
+                  返回
+                </button>
+                <button className="secondary-button" disabled={generateState === "generating"} onClick={() => void generatePlan("REVISE")} type="button">
+                  基于当前规划修改
+                </button>
+                <button className="primary-button" disabled={generateState === "generating"} onClick={() => void generatePlan("REWRITE")} type="button">
+                  彻底重写
+                </button>
+              </div>
+            ) : (
+              <>
+                <button className="secondary-button" disabled={generateState === "generating"} onClick={() => setRegenerateChoiceOpen(true)} type="button">
+                  <RefreshCcw aria-hidden="true" size={16} />
+                  重新生成
+                </button>
+                <button className="secondary-button" disabled={generateState === "generating"} onClick={() => void closeDialog()} type="button">
+                  取消
+                </button>
+                <button className="primary-button" disabled={!draft || generateState === "generating"} onClick={() => void applyDraft()} type="button">
+                  应用到这一天
+                </button>
+              </>
+            )
           ) : null}
         </div>
       </section>
@@ -653,6 +653,7 @@ async function streamGeneratePlan({
   let buffer = "";
   let finalDraft: AiDraft | null = null;
   let streamError = "";
+  let shouldStopReading = false;
 
   function handleSsePart(part: string) {
     const event = parseSseEvent(part);
@@ -688,9 +689,11 @@ async function streamGeneratePlan({
     }
     if (event.event === "draft") {
       finalDraft = data as AiDraft;
+      shouldStopReading = true;
     }
     if (event.event === "error") {
       streamError = typeof data.message === "string" && data.message.trim() ? data.message : "AI 生成失败";
+      shouldStopReading = true;
     }
   }
 
@@ -706,6 +709,15 @@ async function streamGeneratePlan({
 
     for (const part of parts) {
       handleSsePart(part);
+      if (shouldStopReading) {
+        break;
+      }
+    }
+
+    if (shouldStopReading) {
+      await reader.cancel().catch(() => undefined);
+      buffer = "";
+      break;
     }
   }
 

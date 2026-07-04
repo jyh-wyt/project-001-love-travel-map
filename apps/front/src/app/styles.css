@@ -1212,8 +1212,7 @@ p {
 
 .ai-inline-empty,
 .ai-must-visit-list,
-.ai-weather-note,
-.ai-regenerate-box {
+.ai-weather-note {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--surface-soft);
@@ -1582,14 +1581,11 @@ p {
   line-height: 1.65;
 }
 
-.ai-regenerate-box p {
-  margin: 6px 0 12px;
-}
-
 .ai-regenerate-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+  width: 100%;
 }
 
 .plan-editor-empty {
