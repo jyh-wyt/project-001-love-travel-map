@@ -43,15 +43,6 @@ type AiDraft = {
   reminders: string[];
 };
 
-type AiDraftHistoryItem = {
-  id: number;
-  title: string;
-  status: string;
-  contentPreview: string;
-  createdAt: string;
-  appliedAt: string | null;
-};
-
 type TravelMemory = {
   memoryId: string;
   sourceType: string;
@@ -117,9 +108,6 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
   const [regenerateChoiceOpen, setRegenerateChoiceOpen] = useState(false);
   const [revisionInstruction, setRevisionInstruction] = useState("");
   const [applyConfirmOpen, setApplyConfirmOpen] = useState(false);
-  const [draftHistory, setDraftHistory] = useState<AiDraftHistoryItem[]>([]);
-  const [draftHistoryLoading, setDraftHistoryLoading] = useState(false);
-  const [draftHistoryError, setDraftHistoryError] = useState("");
 
   const isDateBeyondForecast = useMemo(() => isBeyondForecastRange(day.date), [day.date]);
   const canContinueFromPlaces = places.length > 0;
@@ -128,8 +116,9 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
     if (!isOpen) {
       return;
     }
+    const initialPlaces = inferPlacesFromPlanDay(day);
     setStep("places");
-    setPlaces([]);
+    setPlaces(initialPlaces);
     setPlaceInput("");
     setMustVisitPlaces([]);
     setMorningMode("PLAY");
@@ -145,9 +134,6 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
     setRegenerateChoiceOpen(false);
     setRevisionInstruction("");
     setApplyConfirmOpen(false);
-    setDraftHistory([]);
-    setDraftHistoryError("");
-    void loadDraftHistory();
   }, [day.id, isOpen]);
 
   if (!isOpen) {
@@ -229,7 +215,6 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
       });
       setDraft(nextDraft);
       setGenerateState("done");
-      void loadDraftHistory();
     } catch (error) {
       setGenerateState("idle");
       setErrorMessage(toErrorMessage(error));
@@ -267,20 +252,6 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
     setDraft(null);
     setApplyConfirmOpen(false);
     onClose();
-  }
-
-  async function loadDraftHistory() {
-    try {
-      setDraftHistoryLoading(true);
-      setDraftHistoryError("");
-      const history = await requestJson<AiDraftHistoryItem[]>(`/api/ai/plan-days/${day.id}/drafts`);
-      setDraftHistory(history);
-    } catch (error) {
-      setDraftHistory([]);
-      setDraftHistoryError(toErrorMessage(error));
-    } finally {
-      setDraftHistoryLoading(false);
-    }
   }
 
   function inferDestination() {
@@ -331,9 +302,6 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
               <p className="plan-feedback error">{errorMessage}</p>
             </div>
           ) : null}
-
-          <AiCurrentPlanSummary day={day} />
-          <AiDraftHistory history={draftHistory} loading={draftHistoryLoading} errorMessage={draftHistoryError} />
 
           {step === "places" ? (
             <div className="ai-form-section">
@@ -578,71 +546,6 @@ function AiAgentTrace({ steps }: { steps: AgentStep[] }) {
               <strong>{step.label}</strong>
               <p>{step.message}</p>
             </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function AiCurrentPlanSummary({ day }: { day: PlanDay }) {
-  const title = day.title.trim();
-  const detail = day.detail.trim();
-
-  return (
-    <section className={title || detail ? "ai-current-plan-summary" : "ai-current-plan-summary muted"}>
-      <strong>当前计划摘要</strong>
-      {title || detail ? (
-        <>
-          <span>{title || "未命名行程"}</span>
-          <p>{detail ? trimPlanSummary(detail) : "这一天还没有详细安排。"}</p>
-        </>
-      ) : (
-        <p>这一天还没有保存规划，AI 会根据你接下来填写的地点和时间偏好生成第一版草稿。</p>
-      )}
-    </section>
-  );
-}
-
-function AiDraftHistory({ history, loading, errorMessage }: { history: AiDraftHistoryItem[]; loading: boolean; errorMessage: string }) {
-  if (loading) {
-    return (
-      <section className="ai-draft-history muted">
-        <strong>AI 草稿历史</strong>
-        <p>正在读取最近的 AI 草稿...</p>
-      </section>
-    );
-  }
-
-  if (errorMessage) {
-    return (
-      <section className="ai-draft-history warning">
-        <strong>AI 草稿历史暂时不可用</strong>
-        <p>{errorMessage}</p>
-      </section>
-    );
-  }
-
-  if (history.length === 0) {
-    return (
-      <section className="ai-draft-history muted">
-        <strong>AI 草稿历史</strong>
-        <p>这一天还没有 AI 草稿记录。</p>
-      </section>
-    );
-  }
-
-  return (
-    <section className="ai-draft-history">
-      <strong>AI 草稿历史</strong>
-      <div className="ai-draft-history-list">
-        {history.map((item) => (
-          <article className="ai-draft-history-item" key={item.id}>
-            <div>
-              <strong>{item.title || "AI 旅行计划"}</strong>
-              <span>{formatDraftStatus(item.status)} · {formatHistoryTime(item.createdAt)}</span>
-            </div>
-            {item.contentPreview ? <p>{item.contentPreview}</p> : null}
           </article>
         ))}
       </div>
@@ -957,34 +860,51 @@ function trimMemoryContent(content: string) {
   return normalized.length > 72 ? `${normalized.slice(0, 72)}...` : normalized;
 }
 
-function trimPlanSummary(content: string) {
-  const normalized = content.replace(/\s+/g, " ").trim();
-  return normalized.length > 150 ? `${normalized.slice(0, 150)}...` : normalized;
-}
-
-function formatDraftStatus(status: string) {
-  if (status === "APPLIED") {
-    return "已应用";
-  }
-  if (status === "DISCARDED") {
-    return "已放弃";
-  }
-  return "草稿";
-}
-
-function formatHistoryTime(value: string) {
-  if (!value) {
-    return "时间未知";
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value.replace("T", " ");
-  }
-  return `${parsed.getMonth() + 1}.${parsed.getDate()} ${String(parsed.getHours()).padStart(2, "0")}:${String(parsed.getMinutes()).padStart(2, "0")}`;
-}
-
 function formatStreamingDraftText(content: string) {
   return content.replace(/[{}\[\]",]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function inferPlacesFromPlanDay(day: PlanDay) {
+  const candidates = [
+    ...splitPlaceCandidates(day.title),
+    ...extractPlacesFromDetail(day.detail)
+  ];
+  const seen = new Set<string>();
+  return candidates
+    .map(cleanPlaceCandidate)
+    .filter((place) => {
+      if (!place || place.length > 18 || seen.has(place)) {
+        return false;
+      }
+      seen.add(place);
+      return true;
+    })
+    .slice(0, 8);
+}
+
+function splitPlaceCandidates(value: string) {
+  const normalized = value
+    .replace(/\d{4}年?\d{0,2}月?\d{0,2}日?/g, "")
+    .replace(/第[一二三四五六七八九十\d]+天/g, "")
+    .replace(/一日游|两日游|三日游|旅行|行程|计划/g, " ");
+  return normalized.split(/[、，,\/+&]|与|和|及|还有|以及/).map((item) => item.trim());
+}
+
+function extractPlacesFromDetail(detail: string) {
+  const places: string[] = [];
+  const pattern = /(?:前往|游览|去|到达|安排|体验|漫步|返回)([^，。；;、\n]{2,18})/g;
+  for (const match of detail.matchAll(pattern)) {
+    places.push(match[1]);
+  }
+  return places;
+}
+
+function cleanPlaceCandidate(value: string) {
+  return value
+    .replace(/^(上午|下午|晚上|优先|继续|先|再|可|适合|附近|必去|景点|地点|核心景区)+/g, "")
+    .replace(/(附近|区域|一带|景区|核心景区|游玩|拍照|散步|休息|放松|结束|活动|体验)$/g, "")
+    .replace(/[：:；;。,.，、]/g, "")
+    .trim();
 }
 
 function parseSseEvent(chunk: string) {
