@@ -8,6 +8,7 @@ from app.features.memory.schemas import MemoryUpsertItem
 class FakeMilvusClient:
     def __init__(self) -> None:
         self.created = False
+        self.loaded_collections = []
         self.upserted_data = []
         self.search_calls = []
 
@@ -20,6 +21,9 @@ class FakeMilvusClient:
 
     def upsert(self, collection_name: str, data: List[Dict]) -> None:
         self.upserted_data.extend(data)
+
+    def load_collection(self, collection_name: str) -> None:
+        self.loaded_collections.append(collection_name)
 
     def search(self, **kwargs) -> List[List[Dict]]:
         self.search_calls.append(kwargs)
@@ -104,6 +108,7 @@ class MilvusMemoryStoreTest(unittest.TestCase):
         self.assertEqual(1, len(results))
         self.assertEqual("trip_post_1", results[0].memory_id)
         self.assertEqual(8, results[0].space_id)
+        self.assertEqual(["test_memory"], client.loaded_collections)
         self.assertEqual("space_id == 8", client.search_calls[0]["filter"])
         self.assertEqual(["memory_id", "space_id", "user_id", "source_type", "source_id", "city_code", "city_name", "content", "created_at"], client.search_calls[0]["output_fields"])
 

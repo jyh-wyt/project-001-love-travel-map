@@ -39,6 +39,7 @@ class MilvusMemoryStore:
         if not self.enabled:
             return []
         self._ensure_collection()
+        self._load_collection()
         response = self.client.search(
             collection_name=self.collection,
             data=[query_embedding],
@@ -97,6 +98,9 @@ class MilvusMemoryStore:
             metric_type="COSINE",
             auto_id=False,
         )
+
+    def _load_collection(self) -> None:
+        self.client.load_collection(collection_name=self.collection)
 
     def _to_entity(self, item: MemoryUpsertItem, embedding: List[float]) -> dict:
         return {
