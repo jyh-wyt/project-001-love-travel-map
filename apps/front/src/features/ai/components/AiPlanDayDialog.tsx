@@ -10,6 +10,9 @@ type PlanDay = {
   date: string;
   title: string;
   detail: string;
+  aiPlaces?: string[];
+  aiMustVisitPlaces?: string[];
+  aiHotelLocation?: string;
   sortOrder: number;
 };
 
@@ -94,6 +97,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
   const [step, setStep] = useState<Step>("places");
   const [places, setPlaces] = useState<string[]>([]);
   const [placeInput, setPlaceInput] = useState("");
+  const [hotelLocation, setHotelLocation] = useState("");
   const [mustVisitPlaces, setMustVisitPlaces] = useState<string[]>([]);
   const [morningMode, setMorningMode] = useState<PeriodMode>("PLAY");
   const [afternoonMode, setAfternoonMode] = useState<PeriodMode>("PLAY");
@@ -110,17 +114,18 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
   const [applyConfirmOpen, setApplyConfirmOpen] = useState(false);
 
   const isDateBeyondForecast = useMemo(() => isBeyondForecastRange(day.date), [day.date]);
-  const canContinueFromPlaces = places.length > 0;
+  const canContinueFromPlaces = places.length > 0 && hotelLocation.trim().length > 0;
 
   useEffect(() => {
     if (!isOpen) {
       return;
     }
-    const initialPlaces = inferPlacesFromPlanDay(day);
+    const initialPlaces = day.aiPlaces ?? [];
     setStep("places");
     setPlaces(initialPlaces);
     setPlaceInput("");
-    setMustVisitPlaces([]);
+    setHotelLocation(day.aiHotelLocation ?? "");
+    setMustVisitPlaces((day.aiMustVisitPlaces ?? []).filter((place) => initialPlaces.includes(place)));
     setMorningMode("PLAY");
     setAfternoonMode("PLAY");
     setEveningMode("REST");
@@ -172,7 +177,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
 
   function goNextFromPlaces() {
     if (!canContinueFromPlaces) {
-      setErrorMessage("至少添加 1 个想去的地方");
+      setErrorMessage(places.length === 0 ? "至少添加 1 个想去的地方" : "请填写酒店地点，方便 AI 安排出发和返回");
       return;
     }
     setErrorMessage("");
@@ -201,6 +206,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
         destination: inferDestination(),
         places,
         mustVisitPlaces,
+        hotelLocation: hotelLocation.trim(),
         morningMode,
         afternoonMode,
         eveningMode,
@@ -344,6 +350,21 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
                   <span>AI 会只围绕这些地点安排，不会凭空塞一堆不相关景点。</span>
                 </div>
               )}
+
+              <label className="field-label">
+                <span className="ai-field-title">酒店地点</span>
+                <span className="field-hint">填写酒店、民宿或大概住宿区域，AI 会把它作为出发和返回参考。</span>
+                <input
+                  onChange={(event) => {
+                    setHotelLocation(event.target.value);
+                    if (errorMessage) {
+                      setErrorMessage("");
+                    }
+                  }}
+                  placeholder="例如：五四广场附近酒店"
+                  value={hotelLocation}
+                />
+              </label>
 
               {places.length > 0 ? (
                 <div className="ai-must-visit-list">
@@ -657,6 +678,7 @@ async function streamGeneratePlan({
   destination,
   places,
   mustVisitPlaces,
+  hotelLocation,
   morningMode,
   afternoonMode,
   eveningMode,
@@ -673,6 +695,7 @@ async function streamGeneratePlan({
   destination: string;
   places: string[];
   mustVisitPlaces: string[];
+  hotelLocation: string;
   morningMode: PeriodMode;
   afternoonMode: PeriodMode;
   eveningMode: PeriodMode;
@@ -696,6 +719,7 @@ async function streamGeneratePlan({
       destination,
       places,
       mustVisitPlaces,
+      hotelLocation,
       morningMode,
       afternoonMode,
       eveningMode,
@@ -862,49 +886,6 @@ function trimMemoryContent(content: string) {
 
 function formatStreamingDraftText(content: string) {
   return content.replace(/[{}\[\]",]/g, " ").replace(/\s+/g, " ").trim();
-}
-
-function inferPlacesFromPlanDay(day: PlanDay) {
-  const candidates = [
-    ...splitPlaceCandidates(day.title),
-    ...extractPlacesFromDetail(day.detail)
-  ];
-  const seen = new Set<string>();
-  return candidates
-    .map(cleanPlaceCandidate)
-    .filter((place) => {
-      if (!place || place.length > 18 || seen.has(place)) {
-        return false;
-      }
-      seen.add(place);
-      return true;
-    })
-    .slice(0, 8);
-}
-
-function splitPlaceCandidates(value: string) {
-  const normalized = value
-    .replace(/\d{4}年?\d{0,2}月?\d{0,2}日?/g, "")
-    .replace(/第[一二三四五六七八九十\d]+天/g, "")
-    .replace(/一日游|两日游|三日游|旅行|行程|计划/g, " ");
-  return normalized.split(/[、，,\/+&]|与|和|及|还有|以及/).map((item) => item.trim());
-}
-
-function extractPlacesFromDetail(detail: string) {
-  const places: string[] = [];
-  const pattern = /(?:前往|游览|去|到达|安排|体验|漫步|返回)([^，。；;、\n]{2,18})/g;
-  for (const match of detail.matchAll(pattern)) {
-    places.push(match[1]);
-  }
-  return places;
-}
-
-function cleanPlaceCandidate(value: string) {
-  return value
-    .replace(/^(上午|下午|晚上|优先|继续|先|再|可|适合|附近|必去|景点|地点|核心景区)+/g, "")
-    .replace(/(附近|区域|一带|景区|核心景区|游玩|拍照|散步|休息|放松|结束|活动|体验)$/g, "")
-    .replace(/[：:；;。,.，、]/g, "")
-    .trim();
 }
 
 function parseSseEvent(chunk: string) {

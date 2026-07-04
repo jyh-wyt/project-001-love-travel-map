@@ -90,11 +90,12 @@ public class AiTravelMemoryDocumentFactory {
         }
     }
 
-    public String buildPlanSearchQuery(String destination, List<String> places, List<String> mustVisitPlaces, String notes) {
+    public String buildPlanSearchQuery(String destination, List<String> places, List<String> mustVisitPlaces, String hotelLocation, String notes) {
         StringBuilder query = new StringBuilder();
         appendPart(query, "Destination", normalize(destination));
         appendPart(query, "Places", String.join(", ", places == null ? List.of() : places));
         appendPart(query, "Must visit", String.join(", ", mustVisitPlaces == null ? List.of() : mustVisitPlaces));
+        appendPart(query, "Hotel", normalize(hotelLocation));
         appendPart(query, "Notes", normalize(notes));
         return query.toString().trim();
     }

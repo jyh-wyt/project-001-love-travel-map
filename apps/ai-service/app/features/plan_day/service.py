@@ -19,6 +19,7 @@ PROMPT = PromptTemplate.from_template(
 日期：{plan_date}
 用户想去的地点：{places}
 必去地点：{must_visit_places}
+酒店地点：{hotel_location}
 上午状态：{morning_mode}
 下午状态：{afternoon_mode}
 晚上状态：{evening_mode}
@@ -31,7 +32,7 @@ PROMPT = PromptTemplate.from_template(
 规则：
 1. mode 为 PLAY 时安排出去玩，mode 为 REST 时安排酒店休息。
 2. 必去地点优先安排。
-3. 判断哪些地点适合同一时段顺路游玩，但不要声称你计算了真实地图距离。
+3. 判断哪些地点适合同一时段顺路游玩，并把酒店地点作为出发和返回参考，但不要声称你计算了真实地图距离。
 4. recommendations 推荐上午、下午、晚上出去玩地点附近的美食、咖啡、网红拍照点或休息点。
 5. 如果天气信息提示超过 15 天或天气不可用，必须在 reminders 里提醒用户出行前确认实时天气。
 6. 只输出 JSON，不要输出 markdown。
@@ -84,6 +85,7 @@ def _stream_generate_with_qwen(request: PlanDayGenerateRequest, weather: Dict) -
         plan_date=request.plan_date or "未设置",
         places=json.dumps(request.places, ensure_ascii=False),
         must_visit_places=json.dumps(request.must_visit_places, ensure_ascii=False),
+        hotel_location=request.hotel_location,
         morning_mode=request.morning_mode,
         afternoon_mode=request.afternoon_mode,
         evening_mode=request.evening_mode,

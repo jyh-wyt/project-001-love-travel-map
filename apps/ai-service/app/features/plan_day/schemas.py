@@ -14,6 +14,7 @@ class PlanDayGenerateRequest(BaseModel):
     plan_date: Optional[str] = Field(default="", alias="planDate")
     places: List[str]
     must_visit_places: List[str] = Field(default_factory=list, alias="mustVisitPlaces")
+    hotel_location: str = Field(default="", alias="hotelLocation")
     morning_mode: str = Field(alias="morningMode")
     afternoon_mode: str = Field(alias="afternoonMode")
     evening_mode: str = Field(alias="eveningMode")

@@ -15,6 +15,9 @@ public class TravelPlanDay {
     private LocalDate planDate;
     private String title;
     private String detail;
+    private String aiPlacesJson;
+    private String aiMustVisitPlacesJson;
+    private String aiHotelLocation;
     private Integer sortOrder;
     private Long createdByUserId;
     private Long updatedByUserId;
@@ -60,6 +63,30 @@ public class TravelPlanDay {
 
     public void setDetail(String detail) {
         this.detail = detail;
+    }
+
+    public String getAiPlacesJson() {
+        return aiPlacesJson;
+    }
+
+    public void setAiPlacesJson(String aiPlacesJson) {
+        this.aiPlacesJson = aiPlacesJson;
+    }
+
+    public String getAiMustVisitPlacesJson() {
+        return aiMustVisitPlacesJson;
+    }
+
+    public void setAiMustVisitPlacesJson(String aiMustVisitPlacesJson) {
+        this.aiMustVisitPlacesJson = aiMustVisitPlacesJson;
+    }
+
+    public String getAiHotelLocation() {
+        return aiHotelLocation;
+    }
+
+    public void setAiHotelLocation(String aiHotelLocation) {
+        this.aiHotelLocation = aiHotelLocation;
     }
 
     public Integer getSortOrder() {

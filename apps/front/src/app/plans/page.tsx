@@ -13,6 +13,9 @@ type PlanDay = {
   date: string;
   title: string;
   detail: string;
+  aiPlaces?: string[];
+  aiMustVisitPlaces?: string[];
+  aiHotelLocation?: string;
   sortOrder: number;
 };
 

@@ -128,6 +128,7 @@ public class AiPlanDayService {
             input.put("destination", request.getDestination());
             input.put("places", request.getPlaces());
             input.put("mustVisitPlaces", request.getMustVisitPlaces() == null ? List.of() : request.getMustVisitPlaces());
+            input.put("hotelLocation", request.getHotelLocation() == null ? "" : request.getHotelLocation());
             input.put("morningMode", request.getMorningMode());
             input.put("afternoonMode", request.getAfternoonMode());
             input.put("eveningMode", request.getEveningMode());
@@ -172,6 +173,7 @@ public class AiPlanDayService {
         TravelPlanDay day = requirePlanDay(draft.getPlanDayId(), space.getId());
         day.setTitle(draft.getTitle());
         day.setDetail(formatDraftDetail(draft));
+        applyAiInputMetadata(day, draft.getRunId());
         day.setUpdatedByUserId(userId);
         planDayMapper.updateById(day);
 
@@ -246,6 +248,7 @@ public class AiPlanDayService {
             payload.put("planDate", day.getPlanDate() == null ? "" : day.getPlanDate().toString());
             payload.put("places", request.getPlaces());
             payload.put("mustVisitPlaces", request.getMustVisitPlaces() == null ? List.of() : request.getMustVisitPlaces());
+            payload.put("hotelLocation", request.getHotelLocation() == null ? "" : request.getHotelLocation());
             payload.put("morningMode", request.getMorningMode());
             payload.put("afternoonMode", request.getAfternoonMode());
             payload.put("eveningMode", request.getEveningMode());
@@ -544,6 +547,21 @@ public class AiPlanDayService {
         }
     }
 
+    private void applyAiInputMetadata(TravelPlanDay day, String runId) {
+        AiAgentRun run = findRun(runId);
+        if (run == null || run.getInputJson() == null || run.getInputJson().isBlank()) {
+            return;
+        }
+        try {
+            JsonNode input = objectMapper.readTree(run.getInputJson());
+            day.setAiPlacesJson(input.path("places").isArray() ? input.path("places").toString() : "[]");
+            day.setAiMustVisitPlacesJson(input.path("mustVisitPlaces").isArray() ? input.path("mustVisitPlaces").toString() : "[]");
+            day.setAiHotelLocation(input.path("hotelLocation").asText(""));
+        } catch (Exception ignored) {
+            // AI metadata is helpful for the next edit, but should not block applying a valid draft.
+        }
+    }
+
     private String buildDraftPreview(AiPlanDayDraft draft) {
         try {
             JsonNode morning = objectMapper.readTree(draft.getMorningJson());
@@ -608,7 +626,21 @@ public class AiPlanDayService {
                 day.getPlanDate() == null ? "" : day.getPlanDate().toString(),
                 day.getTitle() == null ? "" : day.getTitle(),
                 day.getDetail() == null ? "" : day.getDetail(),
+                parseStringList(day.getAiPlacesJson()),
+                parseStringList(day.getAiMustVisitPlacesJson()),
+                day.getAiHotelLocation() == null ? "" : day.getAiHotelLocation(),
                 day.getSortOrder());
+    }
+
+    private List<String> parseStringList(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(json, objectMapper.getTypeFactory().constructCollectionType(List.class, String.class));
+        } catch (Exception exception) {
+            return List.of();
+        }
     }
 
     private static class BufferedSseEvent {

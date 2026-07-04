@@ -12,6 +12,8 @@ public class AiPlanDayGenerateRequest {
     private List<String> places;
     private List<String> mustVisitPlaces;
     @NotBlank
+    private String hotelLocation;
+    @NotBlank
     private String morningMode;
     @NotBlank
     private String afternoonMode;
@@ -28,6 +30,8 @@ public class AiPlanDayGenerateRequest {
     public void setPlaces(List<String> places) { this.places = places; }
     public List<String> getMustVisitPlaces() { return mustVisitPlaces; }
     public void setMustVisitPlaces(List<String> mustVisitPlaces) { this.mustVisitPlaces = mustVisitPlaces; }
+    public String getHotelLocation() { return hotelLocation; }
+    public void setHotelLocation(String hotelLocation) { this.hotelLocation = hotelLocation; }
     public String getMorningMode() { return morningMode; }
     public void setMorningMode(String morningMode) { this.morningMode = morningMode; }
     public String getAfternoonMode() { return afternoonMode; }

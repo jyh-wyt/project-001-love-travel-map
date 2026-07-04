@@ -80,6 +80,7 @@ public class AiTravelMemorySyncService {
                     request.getDestination(),
                     request.getPlaces(),
                     request.getMustVisitPlaces(),
+                    request.getHotelLocation(),
                     request.getNotes());
             if (query.isBlank()) {
                 return new MemorySearchResult(true, List.of(), "");

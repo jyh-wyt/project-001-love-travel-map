@@ -57,11 +57,13 @@ class AiTravelMemoryDocumentFactoryTest {
                 "Qingdao",
                 List.of("Badaguan", "Xiaomai Island"),
                 List.of("Xiaomai Island"),
+                "May Fourth Square Hotel",
                 "Prefer relaxed photo spots");
 
         assertTrue(query.contains("Qingdao"));
         assertTrue(query.contains("Badaguan"));
         assertTrue(query.contains("Xiaomai Island"));
+        assertTrue(query.contains("May Fourth Square Hotel"));
         assertTrue(query.contains("Prefer relaxed photo spots"));
     }
 }

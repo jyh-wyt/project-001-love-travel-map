@@ -1,6 +1,8 @@
 package com.lovetravel.server.modules.plan.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lovetravel.server.common.ApiException;
 import com.lovetravel.server.modules.plan.mapper.TravelPlanDayMapper;
 import com.lovetravel.server.modules.space.domain.CoupleSpace;
@@ -20,10 +22,12 @@ public class PlanService {
 
     private final TravelPlanDayMapper planDayMapper;
     private final SpaceService spaceService;
+    private final ObjectMapper objectMapper;
 
-    public PlanService(TravelPlanDayMapper planDayMapper, SpaceService spaceService) {
+    public PlanService(TravelPlanDayMapper planDayMapper, SpaceService spaceService, ObjectMapper objectMapper) {
         this.planDayMapper = planDayMapper;
         this.spaceService = spaceService;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional
@@ -120,6 +124,20 @@ public class PlanService {
                 day.getPlanDate() == null ? "" : day.getPlanDate().toString(),
                 day.getTitle() == null ? "" : day.getTitle(),
                 day.getDetail() == null ? "" : day.getDetail(),
+                parseStringList(day.getAiPlacesJson()),
+                parseStringList(day.getAiMustVisitPlacesJson()),
+                day.getAiHotelLocation() == null ? "" : day.getAiHotelLocation(),
                 day.getSortOrder());
+    }
+
+    private List<String> parseStringList(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<String>>() {});
+        } catch (Exception exception) {
+            return List.of();
+        }
     }
 }
