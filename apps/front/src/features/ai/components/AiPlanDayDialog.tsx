@@ -43,6 +43,15 @@ type AiDraft = {
   reminders: string[];
 };
 
+type AiDraftHistoryItem = {
+  id: number;
+  title: string;
+  status: string;
+  contentPreview: string;
+  createdAt: string;
+  appliedAt: string | null;
+};
+
 type TravelMemory = {
   memoryId: string;
   sourceType: string;
@@ -108,6 +117,9 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
   const [regenerateChoiceOpen, setRegenerateChoiceOpen] = useState(false);
   const [revisionInstruction, setRevisionInstruction] = useState("");
   const [applyConfirmOpen, setApplyConfirmOpen] = useState(false);
+  const [draftHistory, setDraftHistory] = useState<AiDraftHistoryItem[]>([]);
+  const [draftHistoryLoading, setDraftHistoryLoading] = useState(false);
+  const [draftHistoryError, setDraftHistoryError] = useState("");
 
   const isDateBeyondForecast = useMemo(() => isBeyondForecastRange(day.date), [day.date]);
   const canContinueFromPlaces = places.length > 0;
@@ -133,6 +145,9 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
     setRegenerateChoiceOpen(false);
     setRevisionInstruction("");
     setApplyConfirmOpen(false);
+    setDraftHistory([]);
+    setDraftHistoryError("");
+    void loadDraftHistory();
   }, [day.id, isOpen]);
 
   if (!isOpen) {
@@ -214,6 +229,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
       });
       setDraft(nextDraft);
       setGenerateState("done");
+      void loadDraftHistory();
     } catch (error) {
       setGenerateState("idle");
       setErrorMessage(toErrorMessage(error));
@@ -251,6 +267,20 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
     setDraft(null);
     setApplyConfirmOpen(false);
     onClose();
+  }
+
+  async function loadDraftHistory() {
+    try {
+      setDraftHistoryLoading(true);
+      setDraftHistoryError("");
+      const history = await requestJson<AiDraftHistoryItem[]>(`/api/ai/plan-days/${day.id}/drafts`);
+      setDraftHistory(history);
+    } catch (error) {
+      setDraftHistory([]);
+      setDraftHistoryError(toErrorMessage(error));
+    } finally {
+      setDraftHistoryLoading(false);
+    }
   }
 
   function inferDestination() {
@@ -303,6 +333,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
           ) : null}
 
           <AiCurrentPlanSummary day={day} />
+          <AiDraftHistory history={draftHistory} loading={draftHistoryLoading} errorMessage={draftHistoryError} />
 
           {step === "places" ? (
             <div className="ai-form-section">
@@ -569,6 +600,52 @@ function AiCurrentPlanSummary({ day }: { day: PlanDay }) {
       ) : (
         <p>这一天还没有保存规划，AI 会根据你接下来填写的地点和时间偏好生成第一版草稿。</p>
       )}
+    </section>
+  );
+}
+
+function AiDraftHistory({ history, loading, errorMessage }: { history: AiDraftHistoryItem[]; loading: boolean; errorMessage: string }) {
+  if (loading) {
+    return (
+      <section className="ai-draft-history muted">
+        <strong>AI 草稿历史</strong>
+        <p>正在读取最近的 AI 草稿...</p>
+      </section>
+    );
+  }
+
+  if (errorMessage) {
+    return (
+      <section className="ai-draft-history warning">
+        <strong>AI 草稿历史暂时不可用</strong>
+        <p>{errorMessage}</p>
+      </section>
+    );
+  }
+
+  if (history.length === 0) {
+    return (
+      <section className="ai-draft-history muted">
+        <strong>AI 草稿历史</strong>
+        <p>这一天还没有 AI 草稿记录。</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="ai-draft-history">
+      <strong>AI 草稿历史</strong>
+      <div className="ai-draft-history-list">
+        {history.map((item) => (
+          <article className="ai-draft-history-item" key={item.id}>
+            <div>
+              <strong>{item.title || "AI 旅行计划"}</strong>
+              <span>{formatDraftStatus(item.status)} · {formatHistoryTime(item.createdAt)}</span>
+            </div>
+            {item.contentPreview ? <p>{item.contentPreview}</p> : null}
+          </article>
+        ))}
+      </div>
     </section>
   );
 }
@@ -883,6 +960,27 @@ function trimMemoryContent(content: string) {
 function trimPlanSummary(content: string) {
   const normalized = content.replace(/\s+/g, " ").trim();
   return normalized.length > 150 ? `${normalized.slice(0, 150)}...` : normalized;
+}
+
+function formatDraftStatus(status: string) {
+  if (status === "APPLIED") {
+    return "已应用";
+  }
+  if (status === "DISCARDED") {
+    return "已放弃";
+  }
+  return "草稿";
+}
+
+function formatHistoryTime(value: string) {
+  if (!value) {
+    return "时间未知";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value.replace("T", " ");
+  }
+  return `${parsed.getMonth() + 1}.${parsed.getDate()} ${String(parsed.getHours()).padStart(2, "0")}:${String(parsed.getMinutes()).padStart(2, "0")}`;
 }
 
 function formatStreamingDraftText(content: string) {

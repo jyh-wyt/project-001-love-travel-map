@@ -39,6 +39,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import com.lovetravel.server.modules.ai.vo.AiPlanDayApplyResponse;
+import com.lovetravel.server.modules.ai.vo.AiPlanDayDraftHistoryResponse;
 import com.lovetravel.server.modules.ai.dto.AiPlanDayGenerateRequest;
 import com.lovetravel.server.modules.ai.service.AiTravelMemorySyncService.SyncResult;
 import com.lovetravel.server.modules.ai.service.AiTravelMemorySyncService.MemorySearchResult;
@@ -187,6 +188,26 @@ public class AiPlanDayService {
 
         TravelPlanDay updated = planDayMapper.selectById(day.getId());
         return new AiPlanDayApplyResponse(true, toPlanDayResponse(updated));
+    }
+
+    public List<AiPlanDayDraftHistoryResponse> listDraftHistory(Long userId, Long dayId) {
+        CoupleSpace space = spaceService.requireActiveSpace(userId);
+        requirePlanDay(dayId, space.getId());
+        List<AiPlanDayDraft> drafts = draftMapper.selectList(new LambdaQueryWrapper<AiPlanDayDraft>()
+                .eq(AiPlanDayDraft::getSpaceId, space.getId())
+                .eq(AiPlanDayDraft::getPlanDayId, dayId)
+                .eq(AiPlanDayDraft::getDeleted, 0)
+                .orderByDesc(AiPlanDayDraft::getCreatedAt)
+                .last("LIMIT 10"));
+        return drafts.stream()
+                .map(draft -> new AiPlanDayDraftHistoryResponse(
+                        draft.getId(),
+                        draft.getTitle(),
+                        draft.getStatus(),
+                        buildDraftPreview(draft),
+                        draft.getCreatedAt(),
+                        draft.getAppliedAt()))
+                .toList();
     }
 
     @Transactional
@@ -520,6 +541,18 @@ public class AiPlanDayService {
             return builder.toString().trim();
         } catch (Exception exception) {
             throw new ApiException("AI 草稿格式不正确");
+        }
+    }
+
+    private String buildDraftPreview(AiPlanDayDraft draft) {
+        try {
+            JsonNode morning = objectMapper.readTree(draft.getMorningJson());
+            JsonNode afternoon = objectMapper.readTree(draft.getAfternoonJson());
+            JsonNode evening = objectMapper.readTree(draft.getEveningJson());
+            String preview = "上午：" + morning.path("content").asText() + " 下午：" + afternoon.path("content").asText() + " 晚上：" + evening.path("content").asText();
+            return preview.length() > 160 ? preview.substring(0, 160) + "..." : preview;
+        } catch (Exception exception) {
+            return "";
         }
     }
 

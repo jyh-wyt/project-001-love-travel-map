@@ -3,7 +3,9 @@ package com.lovetravel.server.modules.ai.controller;
 import com.lovetravel.server.modules.auth.service.AuthSessionService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import com.lovetravel.server.modules.ai.vo.AiDiscardResponse;
 import com.lovetravel.server.modules.ai.vo.AiPlanDayApplyResponse;
+import com.lovetravel.server.modules.ai.vo.AiPlanDayDraftHistoryResponse;
 import com.lovetravel.server.modules.ai.dto.AiPlanDayGenerateRequest;
 import com.lovetravel.server.modules.ai.service.AiPlanDayService;
 
@@ -34,6 +37,12 @@ public class AiPlanDayController {
             @Valid @RequestBody AiPlanDayGenerateRequest request) {
         Long userId = authSessionService.requireCurrentUserId(servletRequest);
         return aiPlanDayService.generatePlanDay(userId, dayId, request);
+    }
+
+    @GetMapping("/plan-days/{dayId}/drafts")
+    public List<AiPlanDayDraftHistoryResponse> listDraftHistory(@PathVariable("dayId") Long dayId, HttpServletRequest servletRequest) {
+        Long userId = authSessionService.requireCurrentUserId(servletRequest);
+        return aiPlanDayService.listDraftHistory(userId, dayId);
     }
 
     @PostMapping("/plan-day-drafts/{draftId}/apply")
