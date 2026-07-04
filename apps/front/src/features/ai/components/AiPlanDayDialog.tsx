@@ -106,6 +106,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
   const [draft, setDraft] = useState<AiDraft | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [regenerateChoiceOpen, setRegenerateChoiceOpen] = useState(false);
+  const [revisionInstruction, setRevisionInstruction] = useState("");
 
   const isDateBeyondForecast = useMemo(() => isBeyondForecastRange(day.date), [day.date]);
   const canContinueFromPlaces = places.length > 0;
@@ -129,6 +130,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
     setDraft(null);
     setErrorMessage("");
     setRegenerateChoiceOpen(false);
+    setRevisionInstruction("");
   }, [day.id, isOpen]);
 
   if (!isOpen) {
@@ -175,6 +177,12 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
   }
 
   async function generatePlan(mode: RegenerateMode) {
+    const normalizedRevisionInstruction = revisionInstruction.trim();
+    if (mode === "REVISE" && !normalizedRevisionInstruction) {
+      setErrorMessage("请先写清楚希望 AI 怎么修改当前规划");
+      return;
+    }
+
     try {
       setStep("preview");
       setGenerateState("generating");
@@ -193,6 +201,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
         afternoonMode,
         eveningMode,
         notes,
+        revisionInstruction: mode === "REVISE" ? normalizedRevisionInstruction : "",
         regenerateMode: mode,
         sourceDraftId: draft?.draftId ?? null,
         onProgress: (message) => updateAgentStep("PLAN_GENERATION", "running", message),
@@ -389,6 +398,25 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
 
               {draft && generateState === "done" ? <AiDraftPreview draft={draft} /> : null}
 
+              {regenerateChoiceOpen ? (
+                <div className="ai-regenerate-box">
+                  <label className="field-label">
+                    <span className="ai-field-title">想让 AI 怎么修改？</span>
+                    <span className="field-hint">例如：上午少走路，下午多安排海边拍照，晚上不要太晚回酒店。</span>
+                    <textarea
+                      onChange={(event) => {
+                        setRevisionInstruction(event.target.value);
+                        if (errorMessage) {
+                          setErrorMessage("");
+                        }
+                      }}
+                      placeholder="写下具体修改要求"
+                      value={revisionInstruction}
+                    />
+                  </label>
+                </div>
+              ) : null}
+
             </div>
           ) : null}
         </div>
@@ -423,7 +451,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
                   返回
                 </button>
                 <button className="secondary-button" disabled={generateState === "generating"} onClick={() => void generatePlan("REVISE")} type="button">
-                  基于当前规划修改
+                  按要求修改
                 </button>
                 <button className="primary-button" disabled={generateState === "generating"} onClick={() => void generatePlan("REWRITE")} type="button">
                   彻底重写
@@ -613,6 +641,7 @@ async function streamGeneratePlan({
   afternoonMode,
   eveningMode,
   notes,
+  revisionInstruction,
   regenerateMode,
   sourceDraftId,
   onProgress,
@@ -628,6 +657,7 @@ async function streamGeneratePlan({
   afternoonMode: PeriodMode;
   eveningMode: PeriodMode;
   notes: string;
+  revisionInstruction: string;
   regenerateMode: RegenerateMode;
   sourceDraftId: number | null;
   onProgress: (message: string) => void;
@@ -650,6 +680,7 @@ async function streamGeneratePlan({
       afternoonMode,
       eveningMode,
       notes,
+      revisionInstruction,
       regenerateMode,
       sourceDraftId
     })

@@ -18,6 +18,7 @@ public class AiPlanDayGenerateRequest {
     @NotBlank
     private String eveningMode;
     private String notes;
+    private String revisionInstruction;
     private String regenerateMode;
     private Long sourceDraftId;
 
@@ -35,6 +36,8 @@ public class AiPlanDayGenerateRequest {
     public void setEveningMode(String eveningMode) { this.eveningMode = eveningMode; }
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+    public String getRevisionInstruction() { return revisionInstruction; }
+    public void setRevisionInstruction(String revisionInstruction) { this.revisionInstruction = revisionInstruction; }
     public String getRegenerateMode() { return regenerateMode; }
     public void setRegenerateMode(String regenerateMode) { this.regenerateMode = regenerateMode; }
     public Long getSourceDraftId() { return sourceDraftId; }

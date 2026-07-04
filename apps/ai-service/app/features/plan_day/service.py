@@ -25,6 +25,7 @@ PROMPT = PromptTemplate.from_template(
 用户备注：{notes}
 重新生成模式：{regenerate_mode}
 已有草稿：{source_draft}
+修改要求：{revision_instruction}
 天气信息：{weather}
 
 规则：
@@ -34,6 +35,7 @@ PROMPT = PromptTemplate.from_template(
 4. recommendations 推荐上午、下午、晚上出去玩地点附近的美食、咖啡、网红拍照点或休息点。
 5. 如果天气信息提示超过 15 天或天气不可用，必须在 reminders 里提醒用户出行前确认实时天气。
 6. 只输出 JSON，不要输出 markdown。
+7. 如果重新生成模式为 REVISE，必须优先保留已有草稿结构，只按“修改要求”调整相关部分。
 
 JSON 格式：
 {{
@@ -86,6 +88,7 @@ def _stream_generate_with_qwen(request: PlanDayGenerateRequest, weather: Dict) -
         afternoon_mode=request.afternoon_mode,
         evening_mode=request.evening_mode,
         notes=request.notes or "",
+        revision_instruction=request.revision_instruction or "",
         regenerate_mode=request.regenerate_mode,
         source_draft=request.source_draft or "",
         weather=json.dumps(weather, ensure_ascii=False),

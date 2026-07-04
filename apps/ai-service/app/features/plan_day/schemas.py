@@ -18,6 +18,7 @@ class PlanDayGenerateRequest(BaseModel):
     afternoon_mode: str = Field(alias="afternoonMode")
     evening_mode: str = Field(alias="eveningMode")
     notes: Optional[str] = ""
+    revision_instruction: Optional[str] = Field(default="", alias="revisionInstruction")
     regenerate_mode: str = Field(default="NEW", alias="regenerateMode")
     source_draft: Optional[Any] = Field(default=None, alias="sourceDraft")
     travel_memories: List[Dict[str, Any]] = Field(default_factory=list, alias="travelMemories")

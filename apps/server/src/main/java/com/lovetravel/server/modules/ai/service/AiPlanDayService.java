@@ -131,6 +131,7 @@ public class AiPlanDayService {
             input.put("afternoonMode", request.getAfternoonMode());
             input.put("eveningMode", request.getEveningMode());
             input.put("notes", request.getNotes() == null ? "" : request.getNotes());
+            input.put("revisionInstruction", request.getRevisionInstruction() == null ? "" : request.getRevisionInstruction());
             input.put("regenerateMode", normalizeRegenerateMode(request.getRegenerateMode()));
             input.put("sourceDraftId", request.getSourceDraftId() == null ? "" : request.getSourceDraftId().toString());
             String inputJson = toJson(input);
@@ -228,6 +229,7 @@ public class AiPlanDayService {
             payload.put("afternoonMode", request.getAfternoonMode());
             payload.put("eveningMode", request.getEveningMode());
             payload.put("notes", request.getNotes() == null ? "" : request.getNotes());
+            payload.put("revisionInstruction", request.getRevisionInstruction() == null ? "" : request.getRevisionInstruction());
             payload.put("regenerateMode", normalizeRegenerateMode(request.getRegenerateMode()));
             payload.put("sourceDraft", loadSourceDraftJson(request.getSourceDraftId(), space.getId()));
             sendAgentStep(emitter, runId, "MEMORY_RETRIEVAL", "running", "正在从向量库检索相关旅行记忆");
@@ -449,6 +451,14 @@ public class AiPlanDayService {
         for (String place : must) {
             if (!request.getPlaces().contains(place)) {
                 throw new ApiException("必去地点只能从已添加地点中选择");
+            }
+        }
+        if ("REVISE".equals(normalizeRegenerateMode(request.getRegenerateMode()))) {
+            if (request.getSourceDraftId() == null) {
+                throw new ApiException("请先生成一版规划后再基于当前规划修改");
+            }
+            if (request.getRevisionInstruction() == null || request.getRevisionInstruction().trim().isEmpty()) {
+                throw new ApiException("请先写清楚希望 AI 怎么修改当前规划");
             }
         }
     }
