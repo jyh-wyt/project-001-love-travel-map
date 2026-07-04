@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, ListChecks, Plus, Trash2, X } from "lucide-react";
+import { Bot, CalendarDays, ListChecks, Pencil, Plus, Trash2, X } from "lucide-react";
 import { AiPlanDayDialog } from "@/features/ai/components/AiPlanDayDialog";
 import { BottomNav } from "@/shared/components/BottomNav";
 import { requestJson, toErrorMessage } from "@/shared/lib/api";
@@ -21,6 +21,11 @@ type PendingDelete = {
   title: string;
 };
 
+type PendingSave = {
+  id: number;
+  title: string;
+};
+
 export default function PlansPage() {
   const { authLoading, authErrorMessage, currentUser } = useAuthGuard();
   const [space, setSpace] = useState<TravelSpace | null>(null);
@@ -28,8 +33,11 @@ export default function PlansPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState<PlanDay | null>(null);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
+  const [pendingSave, setPendingSave] = useState<PendingSave | null>(null);
   const [previewDay, setPreviewDay] = useState<PlanDay | null>(null);
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [modifyChoiceOpen, setModifyChoiceOpen] = useState(false);
+  const [manualEditing, setManualEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -38,6 +46,8 @@ export default function PlansPage() {
   const sortedDays = useMemo(() => [...days].sort(comparePlanDays), [days]);
   const filledDaysCount = days.filter((day) => day.title.trim() || day.detail.trim()).length;
   const canEdit = Boolean(space?.editable);
+  const activeDayHasContent = Boolean(activeDay && hasPlanContent(activeDay));
+  const isEditingPlan = manualEditing || !activeDayHasContent;
 
   useEffect(() => {
     let ignore = false;
@@ -67,6 +77,7 @@ export default function PlansPage() {
         const firstDay = planDays[0] ?? null;
         setEditingId(firstDay?.id ?? null);
         setDraft(firstDay);
+        setManualEditing(firstDay ? !hasPlanContent(firstDay) : false);
       } catch (error) {
         if (!ignore) {
           setErrorMessage(toErrorMessage(error));
@@ -88,6 +99,9 @@ export default function PlansPage() {
     setEditingId(day.id);
     setDraft(day);
     setPreviewDay(day);
+    setManualEditing(!hasPlanContent(day));
+    setModifyChoiceOpen(false);
+    setPendingSave(null);
     setErrorMessage("");
   }
 
@@ -110,11 +124,24 @@ export default function PlansPage() {
       setDays((current) => [...current, nextDay]);
       setEditingId(nextDay.id);
       setDraft(nextDay);
+      setManualEditing(true);
+      setModifyChoiceOpen(false);
     } catch (error) {
       setErrorMessage(toErrorMessage(error));
     } finally {
       setSaving(false);
     }
+  }
+
+  function requestSaveDay() {
+    if (!draft || saving || !canEdit) {
+      return;
+    }
+    if (activeDayHasContent) {
+      setPendingSave({ id: draft.id, title: draft.title });
+      return;
+    }
+    void saveDay();
   }
 
   async function saveDay() {
@@ -136,6 +163,8 @@ export default function PlansPage() {
       setDays((current) => current.map((day) => (day.id === savedDay.id ? savedDay : day)));
       setEditingId(savedDay.id);
       setDraft(savedDay);
+      setManualEditing(false);
+      setPendingSave(null);
       setPreviewDay((current) => (current?.id === savedDay.id ? savedDay : current));
     } catch (error) {
       setErrorMessage(toErrorMessage(error));
@@ -148,6 +177,28 @@ export default function PlansPage() {
     if (activeDay) {
       setDraft(activeDay);
     }
+    setManualEditing(!activeDay || !hasPlanContent(activeDay));
+    setPendingSave(null);
+    setErrorMessage("");
+  }
+
+  function openModifyChoice() {
+    if (!canEdit) {
+      return;
+    }
+    setModifyChoiceOpen(true);
+    setErrorMessage("");
+  }
+
+  function startManualEdit() {
+    setManualEditing(true);
+    setModifyChoiceOpen(false);
+    setErrorMessage("");
+  }
+
+  function startAiRegenerate() {
+    setModifyChoiceOpen(false);
+    setAiDialogOpen(true);
     setErrorMessage("");
   }
 
@@ -170,6 +221,7 @@ export default function PlansPage() {
         const nextActive = [...nextDays].sort(comparePlanDays)[0] ?? null;
         setEditingId(nextActive?.id ?? null);
         setDraft(nextActive);
+        setManualEditing(nextActive ? !hasPlanContent(nextActive) : false);
       }
       setPendingDelete(null);
     } catch (error) {
@@ -246,21 +298,28 @@ export default function PlansPage() {
                 <div className="ai-plan-entry">
                   <div>
                     <strong>AI 规划这一天</strong>
-                    <span>根据地点、天气和上午/下午/晚上安排生成草稿。</span>
+                    <span>{activeDayHasContent ? "已有规划后，请从修改入口选择自己修改或 AI 重新生成。" : "根据地点、天气和上午/下午/晚上安排生成草稿。"}</span>
                   </div>
-                  <button
-                    className="secondary-button"
-                    disabled={saving || !canEdit}
-                    onClick={() => setAiDialogOpen(true)}
-                    type="button"
-                  >
-                    AI 规划
-                  </button>
+                  {activeDayHasContent ? (
+                    <button className="secondary-button" disabled={saving || !canEdit} onClick={openModifyChoice} type="button">
+                      <Pencil aria-hidden="true" size={16} />
+                      修改
+                    </button>
+                  ) : (
+                    <button
+                      className="secondary-button"
+                      disabled={saving || !canEdit}
+                      onClick={() => setAiDialogOpen(true)}
+                      type="button"
+                    >
+                      AI 规划
+                    </button>
+                  )}
                 </div>
                 <label className="field-label">
                   日期
                   <input
-                    disabled={saving || !canEdit}
+                    disabled={saving || !canEdit || !isEditingPlan}
                     onChange={(event) => setDraft({ ...draft, date: event.target.value })}
                     type="date"
                     value={draft.date}
@@ -269,7 +328,7 @@ export default function PlansPage() {
                 <label className="field-label">
                   当天标题
                   <input
-                    disabled={saving || !canEdit}
+                    disabled={saving || !canEdit || !isEditingPlan}
                     onChange={(event) => setDraft({ ...draft, title: event.target.value })}
                     placeholder="例如：到达青岛"
                     value={draft.title}
@@ -278,28 +337,48 @@ export default function PlansPage() {
                 <label className="field-label">
                   当天安排
                   <textarea
-                    disabled={saving || !canEdit}
+                    disabled={saving || !canEdit || !isEditingPlan}
                     onChange={(event) => setDraft({ ...draft, detail: event.target.value })}
                     placeholder="写下这一天要去哪里、几点出发、有什么备注"
                     value={draft.detail}
                   />
                 </label>
                 <div className="compose-actions">
-                  <button className="secondary-button" disabled={saving || !canEdit} onClick={cancelEdit} type="button">
-                    取消
-                  </button>
-                  <button
-                    className="danger-text-button"
-                    disabled={saving || !canEdit}
-                    onClick={() => setPendingDelete({ id: draft.id, title: draft.title })}
-                    type="button"
-                  >
-                    <Trash2 aria-hidden="true" size={16} />
-                    删除这一天
-                  </button>
-                  <button className="primary-button" disabled={saving || !canEdit} onClick={saveDay} type="button">
-                    {saving ? "保存中" : "确定保存"}
-                  </button>
+                  {isEditingPlan ? (
+                    <>
+                      <button className="secondary-button" disabled={saving || !canEdit} onClick={cancelEdit} type="button">
+                        取消
+                      </button>
+                      <button
+                        className="danger-text-button"
+                        disabled={saving || !canEdit}
+                        onClick={() => setPendingDelete({ id: draft.id, title: draft.title })}
+                        type="button"
+                      >
+                        <Trash2 aria-hidden="true" size={16} />
+                        删除这一天
+                      </button>
+                      <button className="primary-button" disabled={saving || !canEdit} onClick={requestSaveDay} type="button">
+                        {saving ? "保存中" : "确定保存"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        className="danger-text-button"
+                        disabled={saving || !canEdit}
+                        onClick={() => setPendingDelete({ id: draft.id, title: draft.title })}
+                        type="button"
+                      >
+                        <Trash2 aria-hidden="true" size={16} />
+                        删除这一天
+                      </button>
+                      <button className="primary-button" disabled={saving || !canEdit} onClick={openModifyChoice} type="button">
+                        <Pencil aria-hidden="true" size={16} />
+                        修改
+                      </button>
+                    </>
+                  )}
                 </div>
               </form>
             ) : (
@@ -333,6 +412,55 @@ export default function PlansPage() {
         </div>
       ) : null}
 
+      {pendingSave ? (
+        <div className="confirm-backdrop" role="presentation">
+          <section className="confirm-dialog" aria-label="保存修改确认" role="dialog" aria-modal="true">
+            <h2>保存这次修改？</h2>
+            <p>
+              {pendingSave.title?.trim()
+                ? `确认后会覆盖当前这一天的规划内容：${pendingSave.title}`
+                : "确认后会覆盖当前这一天的规划内容。"}
+            </p>
+            <div className="compose-actions">
+              <button className="secondary-button" disabled={saving} onClick={() => setPendingSave(null)} type="button">
+                再看看
+              </button>
+              <button className="primary-button" disabled={saving} onClick={() => void saveDay()} type="button">
+                {saving ? "保存中" : "确认保存"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {modifyChoiceOpen && draft ? (
+        <div className="confirm-backdrop" role="presentation">
+          <section className="confirm-dialog plan-modify-dialog" aria-label="选择修改方式" role="dialog" aria-modal="true">
+            <button aria-label="关闭修改方式选择" className="dialog-close-button" onClick={() => setModifyChoiceOpen(false)} type="button">
+              <X aria-hidden="true" size={18} />
+            </button>
+            <h2>修改这一天的规划</h2>
+            <p>可以自己编辑内容，也可以让 AI 基于当前规划重新生成。</p>
+            <div className="plan-modify-options">
+              <button className="plan-modify-option" disabled={saving || !canEdit} onClick={startManualEdit} type="button">
+                <Pencil aria-hidden="true" size={20} />
+                <span>
+                  <strong>自己修改</strong>
+                  <small>直接编辑日期、标题和当天安排，保存前会再次确认。</small>
+                </span>
+              </button>
+              <button className="plan-modify-option" disabled={saving || !canEdit} onClick={startAiRegenerate} type="button">
+                <Bot aria-hidden="true" size={20} />
+                <span>
+                  <strong>AI 重新生成</strong>
+                  <small>进入 AI 弹窗，可以彻底重写，也可以按你的要求修改。</small>
+                </span>
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
       {previewDay ? (
         <div className="confirm-backdrop" role="presentation">
           <section className="plan-preview-dialog" aria-label="当天规划详情" role="dialog" aria-modal="true">
@@ -359,6 +487,8 @@ export default function PlansPage() {
             setDays((current) => current.map((day) => (day.id === nextDay.id ? nextDay : day)));
             setDraft(nextDay);
             setEditingId(nextDay.id);
+            setManualEditing(false);
+            setModifyChoiceOpen(false);
             setPreviewDay((current) => (current?.id === nextDay.id ? nextDay : current));
           }}
           onClose={() => setAiDialogOpen(false)}
@@ -392,6 +522,10 @@ function PlanPreviewContent({ detail }: { detail: string }) {
       ))}
     </div>
   );
+}
+
+function hasPlanContent(day: PlanDay) {
+  return Boolean(day.title.trim() || day.detail.trim());
 }
 
 function parsePlanDetail(detail: string) {

@@ -2305,6 +2305,48 @@ p {
   margin-bottom: 0;
 }
 
+.plan-modify-dialog {
+  position: relative;
+  width: min(520px, 100%);
+  padding-top: 24px;
+}
+
+.plan-modify-options {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.plan-modify-option {
+  min-height: 84px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  padding: 14px;
+  text-align: left;
+}
+
+.plan-modify-option:hover {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+
+.plan-modify-option span {
+  display: grid;
+  gap: 4px;
+}
+
+.plan-modify-option small {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .image-preview-backdrop {
   position: fixed;
   inset: 0;
