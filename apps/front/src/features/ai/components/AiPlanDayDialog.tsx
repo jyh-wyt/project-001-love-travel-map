@@ -302,6 +302,8 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
             </div>
           ) : null}
 
+          <AiCurrentPlanSummary day={day} />
+
           {step === "places" ? (
             <div className="ai-form-section">
               <label className="field-label">
@@ -548,6 +550,25 @@ function AiAgentTrace({ steps }: { steps: AgentStep[] }) {
           </article>
         ))}
       </div>
+    </section>
+  );
+}
+
+function AiCurrentPlanSummary({ day }: { day: PlanDay }) {
+  const title = day.title.trim();
+  const detail = day.detail.trim();
+
+  return (
+    <section className={title || detail ? "ai-current-plan-summary" : "ai-current-plan-summary muted"}>
+      <strong>当前计划摘要</strong>
+      {title || detail ? (
+        <>
+          <span>{title || "未命名行程"}</span>
+          <p>{detail ? trimPlanSummary(detail) : "这一天还没有详细安排。"}</p>
+        </>
+      ) : (
+        <p>这一天还没有保存规划，AI 会根据你接下来填写的地点和时间偏好生成第一版草稿。</p>
+      )}
     </section>
   );
 }
@@ -857,6 +878,11 @@ function formatMemorySource(memory: TravelMemory) {
 function trimMemoryContent(content: string) {
   const normalized = content.replace(/\s+/g, " ").trim();
   return normalized.length > 72 ? `${normalized.slice(0, 72)}...` : normalized;
+}
+
+function trimPlanSummary(content: string) {
+  const normalized = content.replace(/\s+/g, " ").trim();
+  return normalized.length > 150 ? `${normalized.slice(0, 150)}...` : normalized;
 }
 
 function formatStreamingDraftText(content: string) {
