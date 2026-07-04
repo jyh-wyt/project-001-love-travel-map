@@ -11,7 +11,6 @@ public class AiPlanDayGenerateRequest {
     @NotEmpty
     private List<String> places;
     private List<String> mustVisitPlaces;
-    @NotBlank
     private String hotelLocation;
     @NotBlank
     private String morningMode;

@@ -114,7 +114,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
   const [applyConfirmOpen, setApplyConfirmOpen] = useState(false);
 
   const isDateBeyondForecast = useMemo(() => isBeyondForecastRange(day.date), [day.date]);
-  const canContinueFromPlaces = places.length > 0 && hotelLocation.trim().length > 0;
+  const canContinueFromPlaces = places.length > 0;
 
   useEffect(() => {
     if (!isOpen) {
@@ -177,7 +177,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
 
   function goNextFromPlaces() {
     if (!canContinueFromPlaces) {
-      setErrorMessage(places.length === 0 ? "至少添加 1 个想去的地方" : "请填写酒店地点，方便 AI 安排出发和返回");
+      setErrorMessage("至少添加 1 个想去的地方");
       return;
     }
     setErrorMessage("");
@@ -353,7 +353,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
 
               <label className="field-label">
                 <span className="ai-field-title">酒店地点</span>
-                <span className="field-hint">填写酒店、民宿或大概住宿区域，AI 会把它作为出发和返回参考。</span>
+                <span className="field-hint">选填。填写酒店、民宿或大概住宿区域后，AI 会把它作为出发和返回参考。</span>
                 <input
                   onChange={(event) => {
                     setHotelLocation(event.target.value);
