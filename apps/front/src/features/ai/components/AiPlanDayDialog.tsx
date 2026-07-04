@@ -107,6 +107,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
   const [errorMessage, setErrorMessage] = useState("");
   const [regenerateChoiceOpen, setRegenerateChoiceOpen] = useState(false);
   const [revisionInstruction, setRevisionInstruction] = useState("");
+  const [applyConfirmOpen, setApplyConfirmOpen] = useState(false);
 
   const isDateBeyondForecast = useMemo(() => isBeyondForecastRange(day.date), [day.date]);
   const canContinueFromPlaces = places.length > 0;
@@ -131,6 +132,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
     setErrorMessage("");
     setRegenerateChoiceOpen(false);
     setRevisionInstruction("");
+    setApplyConfirmOpen(false);
   }, [day.id, isOpen]);
 
   if (!isOpen) {
@@ -191,6 +193,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
       setReferencedMemories(null);
       setErrorMessage("");
       setRegenerateChoiceOpen(false);
+      setApplyConfirmOpen(false);
 
       const nextDraft = await streamGeneratePlan({
         dayId: day.id,
@@ -227,6 +230,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
         method: "POST"
       });
       setDraft(null);
+      setApplyConfirmOpen(false);
       onApply(response.day);
       onClose();
     } catch (error) {
@@ -245,6 +249,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
       }
     }
     setDraft(null);
+    setApplyConfirmOpen(false);
     onClose();
   }
 
@@ -466,7 +471,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
                 <button className="secondary-button" disabled={generateState === "generating"} onClick={() => void closeDialog()} type="button">
                   取消
                 </button>
-                <button className="primary-button" disabled={!draft || generateState === "generating"} onClick={() => void applyDraft()} type="button">
+                <button className="primary-button" disabled={!draft || generateState === "generating"} onClick={() => setApplyConfirmOpen(true)} type="button">
                   应用到这一天
                 </button>
               </>
@@ -474,6 +479,20 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
           ) : null}
         </div>
       </section>
+      {applyConfirmOpen && draft ? (
+        <section className="ai-apply-confirm" aria-label="确认应用 AI 草稿" role="dialog" aria-modal="true">
+          <h3>应用这版 AI 草稿？</h3>
+          <p>确认后会覆盖当前这一天的标题和安排内容。</p>
+          <div className="ai-apply-confirm-actions">
+            <button className="secondary-button" disabled={generateState === "generating"} onClick={() => setApplyConfirmOpen(false)} type="button">
+              再看看
+            </button>
+            <button className="primary-button" disabled={generateState === "generating"} onClick={() => void applyDraft()} type="button">
+              确认应用
+            </button>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }

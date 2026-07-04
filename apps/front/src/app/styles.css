@@ -1077,6 +1077,36 @@ p {
   overflow: hidden;
 }
 
+.ai-apply-confirm {
+  position: fixed;
+  z-index: 70;
+  width: min(420px, calc(100% - 36px));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 16px 42px rgb(31 43 39 / 0.24);
+  padding: 20px;
+}
+
+.ai-apply-confirm h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 20px;
+}
+
+.ai-apply-confirm p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.ai-apply-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
 .ai-dialog-header {
   position: relative;
   display: flex;
