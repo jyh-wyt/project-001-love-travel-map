@@ -1556,6 +1556,29 @@ p {
   font-size: 12px;
 }
 
+.ai-memory-details {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-memory-details summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--accent-strong);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.ai-memory-details summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.ai-memory-details[open] summary {
+  margin-bottom: 8px;
+}
+
 .ai-memory-list {
   display: grid;
   gap: 8px;

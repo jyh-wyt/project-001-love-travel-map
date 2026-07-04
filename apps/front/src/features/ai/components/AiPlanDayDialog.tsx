@@ -636,25 +636,28 @@ function AiMemoryReferences({ memories, isGenerating }: { memories: MemoryRefere
     );
   }
 
-  const visibleMemories = memories.items.slice(0, visibleMemoryLimit);
+  const visibleMemories = getTopMemories(memories.items, visibleMemoryLimit);
   const hiddenCount = memories.items.length - visibleMemories.length;
 
   return (
     <section className="ai-memory-references">
       <strong>已参考 {memories.items.length} 条旅行记忆</strong>
-      {hiddenCount > 0 ? <p className="ai-memory-limit-note">仅展示最相关的前 {visibleMemoryLimit} 条，另外 {hiddenCount} 条已用于 AI 判断。</p> : null}
-      <div className="ai-memory-list">
-        {visibleMemories.map((memory) => (
-          <article className="ai-memory-item" key={memory.memoryId}>
-            <div className="ai-memory-meta">
-              <span>{formatMemorySource(memory)}</span>
-              <span className={`ai-memory-match ${formatMemoryMatchClass(memory.score)}`}>{formatMemoryMatchLevel(memory.score)}</span>
-            </div>
-            <p className="ai-memory-reason">{formatMemoryReason(memory)}</p>
-            <p>{trimMemoryContent(memory.content)}</p>
-          </article>
-        ))}
-      </div>
+      <details className="ai-memory-details">
+        <summary>查看 AI 为什么这样规划</summary>
+        {hiddenCount > 0 ? <p className="ai-memory-limit-note">仅展示 RAG 检索最相关的 Top {visibleMemoryLimit}，另外 {hiddenCount} 条已用于 AI 判断。</p> : null}
+        <div className="ai-memory-list">
+          {visibleMemories.map((memory) => (
+            <article className="ai-memory-item" key={memory.memoryId}>
+              <div className="ai-memory-meta">
+                <span>{formatMemorySource(memory)}</span>
+                <span className={`ai-memory-match ${formatMemoryMatchClass(memory.score)}`}>{formatMemoryMatchLevel(memory.score)}</span>
+              </div>
+              <p className="ai-memory-reason">{formatMemoryReason(memory)}</p>
+              <p>{trimMemoryContent(memory.content)}</p>
+            </article>
+          ))}
+        </div>
+      </details>
     </section>
   );
 }
@@ -881,6 +884,10 @@ function parseTravelMemories(value: unknown): TravelMemory[] {
 function formatMemorySource(memory: TravelMemory) {
   const source = memory.sourceType === "PLAN_DAY" ? "计划" : "日记";
   return memory.cityName ? `${memory.cityName} · ${source}` : source;
+}
+
+function getTopMemories(memories: TravelMemory[], limit: number) {
+  return [...memories].sort((first, second) => first.score - second.score).slice(0, limit);
 }
 
 function formatMemoryMatchLevel(score: number) {
