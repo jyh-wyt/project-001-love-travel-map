@@ -1563,17 +1563,56 @@ p {
 
 .ai-memory-item {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   padding: 10px 11px;
   border: 1px solid color-mix(in srgb, var(--accent) 16%, var(--line));
   border-radius: 10px;
   background: var(--surface);
 }
 
-.ai-memory-item span {
+.ai-memory-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ai-memory-meta span:first-child {
   color: var(--accent-strong);
   font-size: 12px;
   font-weight: 800;
+}
+
+.ai-memory-match {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ai-memory-match.high {
+  background: color-mix(in srgb, #2f9461 14%, var(--surface));
+  color: #236047;
+}
+
+.ai-memory-match.medium {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent-strong);
+}
+
+.ai-memory-match.low {
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+
+.ai-memory-item .ai-memory-reason {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .ai-memory-item p {

@@ -646,7 +646,11 @@ function AiMemoryReferences({ memories, isGenerating }: { memories: MemoryRefere
       <div className="ai-memory-list">
         {visibleMemories.map((memory) => (
           <article className="ai-memory-item" key={memory.memoryId}>
-            <span>{formatMemorySource(memory)}</span>
+            <div className="ai-memory-meta">
+              <span>{formatMemorySource(memory)}</span>
+              <span className={`ai-memory-match ${formatMemoryMatchClass(memory.score)}`}>{formatMemoryMatchLevel(memory.score)}</span>
+            </div>
+            <p className="ai-memory-reason">{formatMemoryReason(memory)}</p>
             <p>{trimMemoryContent(memory.content)}</p>
           </article>
         ))}
@@ -877,6 +881,33 @@ function parseTravelMemories(value: unknown): TravelMemory[] {
 function formatMemorySource(memory: TravelMemory) {
   const source = memory.sourceType === "PLAN_DAY" ? "计划" : "日记";
   return memory.cityName ? `${memory.cityName} · ${source}` : source;
+}
+
+function formatMemoryMatchLevel(score: number) {
+  if (score <= 0.25) {
+    return "匹配度高";
+  }
+  if (score <= 0.55) {
+    return "匹配度中";
+  }
+  return "匹配度低";
+}
+
+function formatMemoryMatchClass(score: number) {
+  if (score <= 0.25) {
+    return "high";
+  }
+  if (score <= 0.55) {
+    return "medium";
+  }
+  return "low";
+}
+
+function formatMemoryReason(memory: TravelMemory) {
+  if (memory.sourceType === "PLAN_DAY") {
+    return "参考原因：来自你们之前保存过的旅行计划，可帮助 AI 延续已安排过的路线和偏好。";
+  }
+  return "参考原因：来自你们之前写过的旅行日记，可帮助 AI 记住真实去过的地点和体验。";
 }
 
 function trimMemoryContent(content: string) {
