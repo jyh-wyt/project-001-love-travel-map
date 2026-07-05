@@ -1,6 +1,6 @@
 import json
 import re
-from typing import Dict, Generator, Iterable, Union
+from typing import Dict, Generator, Iterable, List, Union
 
 import dashscope
 from langchain_core.prompts import PromptTemplate
@@ -17,26 +17,23 @@ PROMPT = PromptTemplate.from_template(
 
 目的地：{destination}
 日期：{plan_date}
-用户想去的地点：{places}
-必去地点：{must_visit_places}
-酒店地点：{hotel_location}
-上午状态：{morning_mode}
-下午状态：{afternoon_mode}
-晚上状态：{evening_mode}
 用户备注：{notes}
 重新生成模式：{regenerate_mode}
 已有草稿：{source_draft}
 修改要求：{revision_instruction}
-天气信息：{weather}
+
+Agent Tool Results:
+{tool_results}
 
 规则：
-1. mode 为 PLAY 时安排出去玩，mode 为 REST 时安排酒店休息。
-2. 必去地点优先安排。
-3. 判断哪些地点适合同一时段顺路游玩；如果用户提供了酒店地点，把酒店地点作为出发和返回参考；不要声称你计算了真实地图距离。
-4. recommendations 推荐上午、下午、晚上出去玩地点附近的美食、咖啡、网红拍照点或休息点。
-5. 如果天气信息提示超过 15 天或天气不可用，必须在 reminders 里提醒用户出行前确认实时天气。
-6. 只输出 JSON，不要输出 markdown。
-7. 如果重新生成模式为 REVISE，必须优先保留已有草稿结构，只按“修改要求”调整相关部分。
+1. place_constraint 是硬约束：只能围绕 data.places 里的地点规划；不得新增用户没有输入过的景点。
+2. data.mustVisitPlaces 是必去地点，必须优先安排；mode 为 PLAY 时安排出去玩，mode 为 REST 时安排酒店休息。
+3. 如果 place_constraint.data.hotelLocation 不为空，把酒店地点作为出发和返回参考；不要声称你计算了真实地图距离。
+4. memory_retrieval 是软参考：只能用来理解用户偏好和历史体验，不要编造工具结果里没有的历史。
+5. weather_context 是环境约束：如果天气不可用或超过预报范围，必须在 reminders 里提醒用户出行前确认实时天气。
+6. recommendations 只能围绕用户输入地点附近推荐美食、咖啡、拍照点或休息点，不要新增独立景点。
+7. 只输出 JSON，不要输出 markdown。
+8. 如果重新生成模式为 REVISE，必须优先保留已有草稿结构，只按“修改要求”调整相关部分。
 
 JSON 格式：
 {{
@@ -49,24 +46,26 @@ JSON 格式：
   ],
   "reminders": ["提醒1"]
 }}
-Travel memories from this private space: {travel_memories}
 """
 )
 
 
 def stream_plan_day(request: PlanDayGenerateRequest) -> Generator[str, None, None]:
     yield sse_event("progress", {"step": "START", "message": "正在分析当天安排"})
-    yield _tool_result_event(_place_constraint_result(request))
+    place_constraint = _place_constraint_result(request)
+    yield _tool_result_event(place_constraint)
     yield sse_event("progress", {"step": "WEATHER", "message": "正在查询天气"})
     weather = get_weather(request.destination, request.plan_date or "")
-    yield _tool_result_event(_weather_tool_result(weather.to_dict()))
+    weather_context = _weather_tool_result(weather.to_dict())
+    yield _tool_result_event(weather_context)
+    memory_retrieval = _memory_tool_result(request.travel_memories)
 
     yield sse_event("progress", {"step": "PLACE_GROUPING", "message": "正在分析地点组合"})
     yield sse_event("progress", {"step": "GENERATE_PLAN", "message": "正在安排上午、下午和晚上"})
 
     try:
         draft = None
-        for event in _stream_generate_with_qwen(request, weather.to_dict()):
+        for event in _stream_generate_with_qwen(request, [place_constraint, weather_context, memory_retrieval]):
             if isinstance(event, PlanDayDraft):
                 draft = event
             else:
@@ -123,25 +122,35 @@ def _weather_tool_result(weather: Dict) -> Dict:
     }
 
 
-def _stream_generate_with_qwen(request: PlanDayGenerateRequest, weather: Dict) -> Generator[Union[str, PlanDayDraft], None, None]:
+def _memory_tool_result(memories: List[Dict]) -> Dict:
+    top_memories = memories[:3]
+    if top_memories:
+        status = "done"
+        summary = f"已提供 {len(top_memories)} 条 RAG Top 记忆作为偏好参考"
+    else:
+        status = "skipped"
+        summary = "没有可用的历史记忆，按本次输入规划"
+    return {
+        "toolName": "memory_retrieval",
+        "label": "历史记忆检索工具",
+        "status": status,
+        "summary": summary,
+        "data": {"topMemories": top_memories},
+    }
+
+
+def _stream_generate_with_qwen(request: PlanDayGenerateRequest, tool_results: List[Dict]) -> Generator[Union[str, PlanDayDraft], None, None]:
     if not settings.aliyun_dashscope_api_key:
         raise RuntimeError("ALIYUN_DASHSCOPE_API_KEY is not configured")
 
     prompt = PROMPT.format(
         destination=request.destination,
         plan_date=request.plan_date or "未设置",
-        places=json.dumps(request.places, ensure_ascii=False),
-        must_visit_places=json.dumps(request.must_visit_places, ensure_ascii=False),
-        hotel_location=request.hotel_location,
-        morning_mode=request.morning_mode,
-        afternoon_mode=request.afternoon_mode,
-        evening_mode=request.evening_mode,
         notes=request.notes or "",
         revision_instruction=request.revision_instruction or "",
         regenerate_mode=request.regenerate_mode,
         source_draft=request.source_draft or "",
-        weather=json.dumps(weather, ensure_ascii=False),
-        travel_memories=json.dumps(request.travel_memories[:3], ensure_ascii=False),
+        tool_results=json.dumps(tool_results, ensure_ascii=False, indent=2),
     )
 
     stream = dashscope.Generation.call(

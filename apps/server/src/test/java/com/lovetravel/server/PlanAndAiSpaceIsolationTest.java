@@ -10,6 +10,7 @@ import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lovetravel.server.common.ApiException;
 import com.lovetravel.server.modules.ai.domain.AiPlanDayDraft;
+import com.lovetravel.server.modules.ai.domain.AiAgentRun;
 import com.lovetravel.server.modules.ai.mapper.AiAgentEventMapper;
 import com.lovetravel.server.modules.ai.mapper.AiAgentRunMapper;
 import com.lovetravel.server.modules.ai.mapper.AiPlanDayDraftMapper;
@@ -35,6 +36,8 @@ class PlanAndAiSpaceIsolationTest {
     private SpaceService spaceService;
     private TravelPlanDayMapper planDayMapper;
     private AiPlanDayDraftMapper draftMapper;
+    private AiAgentRunMapper runMapper;
+    private AiAgentEventMapper eventMapper;
 
     @BeforeEach
     void setUp() {
@@ -43,6 +46,8 @@ class PlanAndAiSpaceIsolationTest {
         spaceService = Mockito.mock(SpaceService.class);
         planDayMapper = Mockito.mock(TravelPlanDayMapper.class);
         draftMapper = Mockito.mock(AiPlanDayDraftMapper.class);
+        runMapper = Mockito.mock(AiAgentRunMapper.class);
+        eventMapper = Mockito.mock(AiAgentEventMapper.class);
     }
 
     @Test
@@ -102,12 +107,24 @@ class PlanAndAiSpaceIsolationTest {
         assertThrows(ApiException.class, () -> aiService().applyDraft(7L, 33L));
     }
 
+    @Test
+    void listAiRunEventsRejectsOtherSpaceRun() {
+        Mockito.when(spaceService.requireActiveSpace(7L)).thenReturn(space(11L));
+        AiAgentRun otherSpaceRun = new AiAgentRun();
+        otherSpaceRun.setRunId("ai_run_other");
+        otherSpaceRun.setSpaceId(99L);
+        otherSpaceRun.setDeleted(0);
+        Mockito.when(runMapper.selectOne(any())).thenReturn(otherSpaceRun);
+
+        assertThrows(ApiException.class, () -> aiService().listRunEvents(7L, "ai_run_other"));
+    }
+
     private AiPlanDayService aiService() {
         return new AiPlanDayService(
                 spaceService,
                 planDayMapper,
-                Mockito.mock(AiAgentRunMapper.class),
-                Mockito.mock(AiAgentEventMapper.class),
+                runMapper,
+                eventMapper,
                 draftMapper,
                 Mockito.mock(AppUserMapper.class),
                 Mockito.mock(AiTravelMemorySyncService.class),

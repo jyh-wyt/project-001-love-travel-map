@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import com.lovetravel.server.modules.ai.vo.AiDiscardResponse;
+import com.lovetravel.server.modules.ai.vo.AiAgentRunEventsResponse;
 import com.lovetravel.server.modules.ai.vo.AiPlanDayApplyResponse;
 import com.lovetravel.server.modules.ai.vo.AiPlanDayDraftHistoryResponse;
 import com.lovetravel.server.modules.ai.dto.AiPlanDayGenerateRequest;
@@ -43,6 +44,12 @@ public class AiPlanDayController {
     public List<AiPlanDayDraftHistoryResponse> listDraftHistory(@PathVariable("dayId") Long dayId, HttpServletRequest servletRequest) {
         Long userId = authSessionService.requireCurrentUserId(servletRequest);
         return aiPlanDayService.listDraftHistory(userId, dayId);
+    }
+
+    @GetMapping("/runs/{runId}/events")
+    public AiAgentRunEventsResponse listRunEvents(@PathVariable("runId") String runId, HttpServletRequest servletRequest) {
+        Long userId = authSessionService.requireCurrentUserId(servletRequest);
+        return aiPlanDayService.listRunEvents(userId, runId);
     }
 
     @PostMapping("/plan-day-drafts/{draftId}/apply")

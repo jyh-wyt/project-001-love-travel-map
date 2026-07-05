@@ -39,6 +39,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import com.lovetravel.server.modules.ai.vo.AiPlanDayApplyResponse;
+import com.lovetravel.server.modules.ai.vo.AiAgentEventResponse;
+import com.lovetravel.server.modules.ai.vo.AiAgentRunEventsResponse;
 import com.lovetravel.server.modules.ai.vo.AiPlanDayDraftHistoryResponse;
 import com.lovetravel.server.modules.ai.dto.AiPlanDayGenerateRequest;
 import com.lovetravel.server.modules.ai.service.AiTravelMemorySyncService.SyncResult;
@@ -210,6 +212,34 @@ public class AiPlanDayService {
                         draft.getCreatedAt(),
                         draft.getAppliedAt()))
                 .toList();
+    }
+
+    public AiAgentRunEventsResponse listRunEvents(Long userId, String runId) {
+        CoupleSpace space = spaceService.requireActiveSpace(userId);
+        AiAgentRun run = findRun(runId);
+        if (run == null || Integer.valueOf(1).equals(run.getDeleted()) || !space.getId().equals(run.getSpaceId())) {
+            throw new ApiException("AI 执行记录不存在或无权访问");
+        }
+        List<AiAgentEventResponse> events = eventMapper.selectList(new LambdaQueryWrapper<AiAgentEvent>()
+                        .eq(AiAgentEvent::getRunId, runId)
+                        .orderByAsc(AiAgentEvent::getId))
+                .stream()
+                .map(event -> new AiAgentEventResponse(
+                        event.getId(),
+                        event.getEventType(),
+                        event.getEventMessage(),
+                        event.getEventJson(),
+                        event.getCreatedAt()))
+                .toList();
+        return new AiAgentRunEventsResponse(
+                run.getRunId(),
+                run.getAgentType(),
+                run.getModelName(),
+                run.getPromptVersion(),
+                run.getStatus(),
+                run.getDurationMs(),
+                run.getCreatedAt(),
+                events);
     }
 
     @Transactional
