@@ -138,9 +138,7 @@ function redirectToLogin() {
     return;
   }
 
-  const nextPath = `${window.location.pathname}${window.location.search}`;
-  const nextQuery = nextPath === "/" ? "" : `?next=${encodeURIComponent(nextPath)}`;
-  window.location.href = `${LOGIN_PATH}${nextQuery}`;
+  window.location.href = LOGIN_PATH;
 }
 
 function resolveApiBaseUrl() {
