@@ -39,7 +39,7 @@ class PlanDayStreamingTest(unittest.TestCase):
         )
 
         with patch("app.features.plan_day.service.settings.aliyun_dashscope_api_key", "test-key"), patch(
-            "app.features.plan_day.service.get_weather",
+            "app.features.plan_day.agent_tools.get_weather",
             return_value=WeatherResult(available=False, reason="test"),
         ), patch("app.features.plan_day.service.dashscope.Generation.call", return_value=_fake_stream(chunks)):
             events = list(stream_plan_day(request))
