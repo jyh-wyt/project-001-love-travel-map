@@ -80,6 +80,25 @@ type AiApplyResponse = {
   day: PlanDay;
 };
 
+type AiAgentEventItem = {
+  id: number;
+  eventType: string;
+  eventMessage: string;
+  eventJson: string;
+  createdAt: string;
+};
+
+type AiAgentRunEvents = {
+  runId: string;
+  agentType: string;
+  modelName: string;
+  promptVersion: string;
+  status: string;
+  durationMs: number | null;
+  createdAt: string;
+  events: AiAgentEventItem[];
+};
+
 type AiPlanDayDialogProps = {
   day: PlanDay;
   isOpen: boolean;
@@ -120,6 +139,8 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
   const [regenerateChoiceOpen, setRegenerateChoiceOpen] = useState(false);
   const [revisionInstruction, setRevisionInstruction] = useState("");
   const [applyConfirmOpen, setApplyConfirmOpen] = useState(false);
+  const [runEvents, setRunEvents] = useState<AiAgentRunEvents | null>(null);
+  const [runEventsLoading, setRunEventsLoading] = useState(false);
 
   const isDateBeyondForecast = useMemo(() => isBeyondForecastRange(day.date), [day.date]);
   const canContinueFromPlaces = places.length > 0;
@@ -148,6 +169,8 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
     setRegenerateChoiceOpen(false);
     setRevisionInstruction("");
     setApplyConfirmOpen(false);
+    setRunEvents(null);
+    setRunEventsLoading(false);
   }, [day.id, isOpen]);
 
   if (!isOpen) {
@@ -207,6 +230,8 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
       setToolResults([]);
       setStreamingDraftText("");
       setReferencedMemories(null);
+      setRunEvents(null);
+      setRunEventsLoading(false);
       setErrorMessage("");
       setRegenerateChoiceOpen(false);
       setApplyConfirmOpen(false);
@@ -269,6 +294,23 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
     setDraft(null);
     setApplyConfirmOpen(false);
     onClose();
+  }
+
+  async function loadRunEvents() {
+    if (!draft || runEventsLoading) {
+      return;
+    }
+
+    try {
+      setRunEventsLoading(true);
+      setErrorMessage("");
+      const response = await requestJson<AiAgentRunEvents>(`/api/ai/runs/${draft.runId}/events`);
+      setRunEvents(response);
+    } catch (error) {
+      setErrorMessage(toErrorMessage(error));
+    } finally {
+      setRunEventsLoading(false);
+    }
   }
 
   function inferDestination() {
@@ -445,6 +487,10 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
               {streamingDraftText && generateState === "generating" ? <AiStreamingDraft text={streamingDraftText} /> : null}
 
               {draft && generateState === "done" ? <AiDraftPreview draft={draft} /> : null}
+
+              {draft && generateState === "done" ? (
+                <AiRunEventsPanel events={runEvents} loading={runEventsLoading} onLoad={() => void loadRunEvents()} />
+              ) : null}
 
               {regenerateChoiceOpen ? (
                 <div className="ai-regenerate-box">
@@ -636,6 +682,41 @@ function AiDraftPreview({ draft }: { draft: AiDraft }) {
         </ul>
       </section>
     </div>
+  );
+}
+
+function AiRunEventsPanel({
+  events,
+  loading,
+  onLoad
+}: {
+  events: AiAgentRunEvents | null;
+  loading: boolean;
+  onLoad: () => void;
+}) {
+  return (
+    <section className="ai-run-events">
+      <div className="ai-run-events-header">
+        <div>
+          <strong>本次 AI 执行记录</strong>
+          <p>{events ? `${events.modelName} · ${formatRunStatus(events.status)} · ${events.events.length} 条事件` : "查看工具调用、RAG、草稿和错误事件。"}</p>
+        </div>
+        <button className="secondary-button" disabled={loading} onClick={onLoad} type="button">
+          {loading ? "读取中" : events ? "刷新记录" : "查看记录"}
+        </button>
+      </div>
+      {events ? (
+        <div className="ai-run-event-list">
+          {events.events.map((event) => (
+            <article className="ai-run-event-item" key={event.id}>
+              <span>{formatEventType(event.eventType)}</span>
+              <strong>{formatEventMessage(event)}</strong>
+              <p>{formatEventDetail(event)}</p>
+            </article>
+          ))}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -934,6 +1015,67 @@ function parseTravelMemories(value: unknown): TravelMemory[] {
 function formatMemorySource(memory: TravelMemory) {
   const source = memory.sourceType === "PLAN_DAY" ? "计划" : "日记";
   return memory.cityName ? `${memory.cityName} · ${source}` : source;
+}
+
+function formatRunStatus(status: string) {
+  const normalized = status.toUpperCase();
+  if (normalized === "SUCCESS") {
+    return "生成成功";
+  }
+  if (normalized === "APPLIED") {
+    return "已应用";
+  }
+  if (normalized === "FAILED") {
+    return "生成失败";
+  }
+  if (normalized === "RUNNING") {
+    return "生成中";
+  }
+  return status || "未知状态";
+}
+
+function formatEventType(eventType: string) {
+  const labels: Record<string, string> = {
+    AGENT_STEP: "步骤",
+    TOOL_RESULT: "工具",
+    MEMORIES: "记忆",
+    DRAFT_DELTA: "流式",
+    DRAFT: "草稿",
+    ERROR: "错误",
+    PROGRESS: "进度"
+  };
+  return labels[eventType] ?? eventType;
+}
+
+function formatEventMessage(event: AiAgentEventItem) {
+  const parsed = parseEventJson(event.eventJson);
+  if (event.eventType === "TOOL_RESULT" && typeof parsed?.label === "string") {
+    return parsed.label;
+  }
+  return event.eventMessage || formatEventType(event.eventType);
+}
+
+function formatEventDetail(event: AiAgentEventItem) {
+  const parsed = parseEventJson(event.eventJson);
+  if (event.eventType === "TOOL_RESULT" && typeof parsed?.summary === "string") {
+    return parsed.summary;
+  }
+  if (event.eventType === "AGENT_STEP" && typeof parsed?.message === "string") {
+    return parsed.message;
+  }
+  return event.eventMessage || "暂无摘要";
+}
+
+function parseEventJson(value: string): Record<string, unknown> | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
 }
 
 function getTopMemories(memories: TravelMemory[], limit: number) {
