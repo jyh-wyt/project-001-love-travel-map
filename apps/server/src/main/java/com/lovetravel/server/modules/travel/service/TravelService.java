@@ -79,6 +79,7 @@ public class TravelService {
         List<VisitedRegionResponse> responses = new ArrayList<>();
         for (Trip trip : tripMapper.selectList(query)) {
             Long recordCount = postMapper.selectCount(new LambdaQueryWrapper<TripPost>()
+                    .eq(TripPost::getSpaceId, space.getId())
                     .eq(TripPost::getTripId, trip.getId())
                     .eq(TripPost::getDeleted, 0));
             if (recordCount == 0 && trip.getStartDate() == null && trip.getEndDate() == null) {
@@ -209,6 +210,7 @@ public class TravelService {
         Trip trip = requireTripForUser(post.getTripId(), request.getUserId());
         List<ImageRequest> newImageRequests = request.getImages() == null ? List.of() : request.getImages();
         long currentImageCount = imageMapper.selectCount(new LambdaQueryWrapper<TripImage>()
+                .eq(TripImage::getSpaceId, trip.getSpaceId())
                 .eq(TripImage::getPostId, postId)
                 .eq(TripImage::getDeleted, 0));
         if (currentImageCount + newImageRequests.size() > MAX_IMAGES_PER_POST) {
@@ -223,7 +225,7 @@ public class TravelService {
         post.setUpdatedAt(LocalDateTime.now());
         postMapper.updateById(post);
 
-        int sortOrder = nextImageSortOrder(postId);
+        int sortOrder = nextImageSortOrder(postId, trip.getSpaceId());
         for (ImageRequest imageRequest : newImageRequests) {
             TripImage image = new TripImage();
             image.setSpaceId(trip.getSpaceId());
@@ -272,6 +274,7 @@ public class TravelService {
         postMapper.updateById(post);
 
         List<TripImage> images = imageMapper.selectList(new LambdaQueryWrapper<TripImage>()
+                .eq(TripImage::getSpaceId, trip.getSpaceId())
                 .eq(TripImage::getPostId, postId)
                 .eq(TripImage::getDeleted, 0));
         for (TripImage image : images) {
@@ -301,12 +304,14 @@ public class TravelService {
 
     private TravelPageResponse toTravelPageResponse(Trip trip) {
         List<TripPost> posts = postMapper.selectList(new LambdaQueryWrapper<TripPost>()
+                .eq(TripPost::getSpaceId, trip.getSpaceId())
                 .eq(TripPost::getTripId, trip.getId())
                 .eq(TripPost::getDeleted, 0)
                 .orderByDesc(TripPost::getCreatedAt));
         List<PostResponse> postResponses = new ArrayList<>();
         for (TripPost post : posts) {
             List<ImageResponse> images = imageMapper.selectList(new LambdaQueryWrapper<TripImage>()
+                            .eq(TripImage::getSpaceId, trip.getSpaceId())
                             .eq(TripImage::getPostId, post.getId())
                             .eq(TripImage::getDeleted, 0))
                     .stream()
@@ -363,8 +368,9 @@ public class TravelService {
                 .toList();
     }
 
-    private int nextImageSortOrder(Long postId) {
+    private int nextImageSortOrder(Long postId, Long spaceId) {
         return imageMapper.selectList(new LambdaQueryWrapper<TripImage>()
+                        .eq(TripImage::getSpaceId, spaceId)
                         .eq(TripImage::getPostId, postId)
                         .eq(TripImage::getDeleted, 0))
                 .stream()
@@ -387,6 +393,7 @@ public class TravelService {
             return trip.getCoverImageUrl();
         }
         TripImage firstImage = imageMapper.selectOne(new LambdaQueryWrapper<TripImage>()
+                .eq(TripImage::getSpaceId, trip.getSpaceId())
                 .eq(TripImage::getTripId, trip.getId())
                 .eq(TripImage::getDeleted, 0)
                 .orderByAsc(TripImage::getCreatedAt)
@@ -396,6 +403,7 @@ public class TravelService {
 
     private void refreshCoverImage(Trip trip) {
         TripImage firstImage = imageMapper.selectOne(new LambdaQueryWrapper<TripImage>()
+                .eq(TripImage::getSpaceId, trip.getSpaceId())
                 .eq(TripImage::getTripId, trip.getId())
                 .eq(TripImage::getDeleted, 0)
                 .orderByAsc(TripImage::getCreatedAt)
