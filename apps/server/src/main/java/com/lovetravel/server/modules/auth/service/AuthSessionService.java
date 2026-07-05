@@ -78,38 +78,42 @@ public class AuthSessionService {
             throw new UnauthorizedException("请先登录");
         }
 
-        String[] parts = token.split("\\.", 2);
-        if (parts.length != 2) {
-            throw new UnauthorizedException("登录状态已失效，请重新登录");
-        }
-
-        String payload = new String(Base64.getUrlDecoder().decode(parts[0]), StandardCharsets.UTF_8);
-        if (!MessageDigest.isEqual(sign(payload).getBytes(StandardCharsets.UTF_8), parts[1].getBytes(StandardCharsets.UTF_8))) {
-            throw new UnauthorizedException("登录状态已失效，请重新登录");
-        }
-
-        String[] payloadParts = payload.split("\\.", 2);
-        if (payloadParts.length != 2) {
-            throw new UnauthorizedException("登录状态已失效，请重新登录");
-        }
-
-        long expiresAt = Long.parseLong(payloadParts[1]);
-        if (expiresAt < Instant.now().getEpochSecond()) {
-            throw new UnauthorizedException("登录已过期，请重新登录");
-        }
-
-        Long userId = Long.parseLong(payloadParts[0]);
-        if (redisTemplate != null) {
-            String redisUserId = redisTemplate.opsForValue().get(sessionKey(token));
-            if (redisUserId == null) {
-                throw new UnauthorizedException("登录状态已失效，请重新登录");
+        try {
+            String[] parts = token.split("\\.", 2);
+            if (parts.length != 2) {
+                throw invalidSession();
             }
-            if (!redisUserId.equals(String.valueOf(userId))) {
-                throw new UnauthorizedException("登录状态异常，请重新登录");
+
+            String payload = new String(Base64.getUrlDecoder().decode(parts[0]), StandardCharsets.UTF_8);
+            if (!MessageDigest.isEqual(sign(payload).getBytes(StandardCharsets.UTF_8), parts[1].getBytes(StandardCharsets.UTF_8))) {
+                throw invalidSession();
             }
-            refreshSession(token, userId, expiresAt);
+
+            String[] payloadParts = payload.split("\\.", 2);
+            if (payloadParts.length != 2) {
+                throw invalidSession();
+            }
+
+            long expiresAt = Long.parseLong(payloadParts[1]);
+            if (expiresAt < Instant.now().getEpochSecond()) {
+                throw new UnauthorizedException("登录已过期，请重新登录");
+            }
+
+            Long userId = Long.parseLong(payloadParts[0]);
+            if (redisTemplate != null) {
+                String redisUserId = redisTemplate.opsForValue().get(sessionKey(token));
+                if (redisUserId == null) {
+                    throw invalidSession();
+                }
+                if (!redisUserId.equals(String.valueOf(userId))) {
+                    throw new UnauthorizedException("登录状态异常，请重新登录");
+                }
+                refreshSession(token, userId, expiresAt);
+            }
+            return userId;
+        } catch (IllegalArgumentException exception) {
+            throw invalidSession();
         }
-        return userId;
     }
 
     private String findCookie(HttpServletRequest request) {
@@ -162,6 +166,10 @@ public class AuthSessionService {
 
     private String sessionKey(String token) {
         return SESSION_KEY_PREFIX + sha256(token);
+    }
+
+    private UnauthorizedException invalidSession() {
+        return new UnauthorizedException("登录状态已失效，请重新登录");
     }
 
     private String sha256(String value) {
