@@ -1496,6 +1496,42 @@ p {
   background: #b42318;
 }
 
+.ai-tool-result-list {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.ai-tool-result {
+  border: 1px solid color-mix(in srgb, var(--accent) 14%, var(--line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 4%, var(--surface));
+  padding: 10px 11px;
+}
+
+.ai-tool-result strong {
+  display: block;
+  color: var(--accent-strong);
+  font-size: 12px;
+}
+
+.ai-tool-result p {
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.ai-tool-result.skipped {
+  background: var(--surface-soft);
+}
+
+.ai-tool-result.failed {
+  border-color: color-mix(in srgb, #b42318 32%, var(--line));
+  background: color-mix(in srgb, #b42318 6%, var(--surface));
+}
+
 .ai-draft-preview {
   display: grid;
   gap: 14px;

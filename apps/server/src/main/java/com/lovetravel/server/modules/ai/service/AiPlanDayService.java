@@ -263,6 +263,7 @@ public class AiPlanDayService {
             sendAgentStep(emitter, runId, "MEMORY_RETRIEVAL", memoryRetrievalStatus(memorySearchResult),
                     memoryRetrievalMessage(memorySearchResult));
             sendMemories(emitter, runId, memorySearchResult);
+            sendToolResult(emitter, runId, buildMemoryToolResult(memorySearchResult));
             sendAgentStep(emitter, runId, "PLAN_GENERATION", "running", "正在调用大模型生成当天计划");
 
             HttpRequest pythonRequest = HttpRequest.newBuilder()
@@ -329,6 +330,11 @@ public class AiPlanDayService {
             emitter.send(SseEmitter.event().name("draft-delta").data(event.data));
             return;
         }
+        if ("tool-result".equals(event.event)) {
+            recordEvent(runId, "TOOL_RESULT", "Agent 工具调用结果", event.data);
+            emitter.send(SseEmitter.event().name("tool-result").data(event.data));
+            return;
+        }
         if ("draft".equals(event.event)) {
             sendAgentStep(emitter, runId, "PLAN_GENERATION", "done", "大模型已返回计划草稿");
             String data = saveDraftAndEnrichEvent(runId, userId, space, day, event.data);
@@ -353,6 +359,37 @@ public class AiPlanDayService {
                 ? (memorySearchResult.memories().isEmpty() ? "AI 未检索到历史记忆" : "AI 已检索到历史记忆")
                 : "AI 记忆检索暂时不可用", data);
         emitter.send(SseEmitter.event().name("memories").data(data));
+    }
+
+    private void sendToolResult(SseEmitter emitter, String runId, Map<String, Object> result) throws IOException {
+        String data = toJson(result);
+        recordEvent(runId, "TOOL_RESULT", String.valueOf(result.getOrDefault("summary", "Agent 工具调用完成")), data);
+        emitter.send(SseEmitter.event().name("tool-result").data(data));
+    }
+
+    private Map<String, Object> buildMemoryToolResult(MemorySearchResult memorySearchResult) {
+        List<Map<String, Object>> memories = memorySearchResult.memories();
+        String status;
+        String summary;
+        if (!memorySearchResult.success()) {
+            status = "failed";
+            summary = memorySearchResult.errorMessage() == null || memorySearchResult.errorMessage().isBlank()
+                    ? "历史记忆检索暂时不可用"
+                    : memorySearchResult.errorMessage();
+        } else if (memories.isEmpty()) {
+            status = "skipped";
+            summary = "当前空间没有匹配到可参考的历史记忆";
+        } else {
+            status = "done";
+            summary = "已检索到 " + memories.size() + " 条历史记忆，前 3 条会用于辅助规划";
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("toolName", "memory_retrieval");
+        result.put("label", "历史记忆检索工具");
+        result.put("status", status);
+        result.put("summary", summary);
+        result.put("data", Map.of("topMemories", memories.stream().limit(3).toList()));
+        return result;
     }
 
     private String memoryRetrievalStatus(MemorySearchResult memorySearchResult) {

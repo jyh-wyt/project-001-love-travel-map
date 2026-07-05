@@ -68,6 +68,13 @@ type AgentStep = {
   message: string;
 };
 
+type ToolResult = {
+  toolName: string;
+  label: string;
+  status: AgentStepStatus;
+  summary: string;
+};
+
 type AiApplyResponse = {
   success: boolean;
   day: PlanDay;
@@ -105,6 +112,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
   const [notes, setNotes] = useState("");
   const [generateState, setGenerateState] = useState<GenerateState>("idle");
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>(initialAgentSteps);
+  const [toolResults, setToolResults] = useState<ToolResult[]>([]);
   const [streamingDraftText, setStreamingDraftText] = useState("");
   const [referencedMemories, setReferencedMemories] = useState<MemoryReferenceState | null>(null);
   const [draft, setDraft] = useState<AiDraft | null>(null);
@@ -132,6 +140,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
     setNotes("");
     setGenerateState("idle");
     setAgentSteps(initialAgentSteps);
+    setToolResults([]);
     setStreamingDraftText("");
     setReferencedMemories(null);
     setDraft(null);
@@ -195,6 +204,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
       setStep("preview");
       setGenerateState("generating");
       setAgentSteps(initialAgentSteps);
+      setToolResults([]);
       setStreamingDraftText("");
       setReferencedMemories(null);
       setErrorMessage("");
@@ -216,6 +226,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
         sourceDraftId: draft?.draftId ?? null,
         onProgress: (message) => updateAgentStep("PLAN_GENERATION", "running", message),
         onAgentStep: (agentStep) => updateAgentStep(agentStep.step, agentStep.status, agentStep.message),
+        onToolResult: upsertToolResult,
         onDraftDelta: (text) => setStreamingDraftText((current) => `${current}${text}`),
         onMemories: setReferencedMemories
       });
@@ -277,6 +288,16 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
           : item
       )
     );
+  }
+
+  function upsertToolResult(result: ToolResult) {
+    setToolResults((current) => {
+      const existingIndex = current.findIndex((item) => item.toolName === result.toolName);
+      if (existingIndex === -1) {
+        return [...current, result];
+      }
+      return current.map((item, index) => (index === existingIndex ? result : item));
+    });
   }
 
   return (
@@ -417,7 +438,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
 
           {step === "preview" ? (
             <div className="ai-preview-section">
-              <AiAgentTrace steps={agentSteps} />
+              <AiAgentTrace steps={agentSteps} toolResults={toolResults} />
 
               <AiMemoryReferences memories={referencedMemories} isGenerating={generateState === "generating"} />
 
@@ -552,7 +573,7 @@ function PeriodModeGroup({
   );
 }
 
-function AiAgentTrace({ steps }: { steps: AgentStep[] }) {
+function AiAgentTrace({ steps, toolResults }: { steps: AgentStep[]; toolResults: ToolResult[] }) {
   return (
     <section className="ai-agent-trace" aria-label="AI 执行轨迹">
       <div className="ai-agent-trace-header">
@@ -570,6 +591,16 @@ function AiAgentTrace({ steps }: { steps: AgentStep[] }) {
           </article>
         ))}
       </div>
+      {toolResults.length > 0 ? (
+        <div className="ai-tool-result-list">
+          {toolResults.map((result) => (
+            <article className={`ai-tool-result ${result.status}`} key={result.toolName}>
+              <strong>{result.label}</strong>
+              <p>{result.summary}</p>
+            </article>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -695,6 +726,7 @@ async function streamGeneratePlan({
   sourceDraftId,
   onProgress,
   onAgentStep,
+  onToolResult,
   onDraftDelta,
   onMemories
 }: {
@@ -712,6 +744,7 @@ async function streamGeneratePlan({
   sourceDraftId: number | null;
   onProgress: (message: string) => void;
   onAgentStep: (step: Pick<AgentStep, "step" | "status" | "message">) => void;
+  onToolResult: (result: ToolResult) => void;
   onDraftDelta: (text: string) => void;
   onMemories: (memories: MemoryReferenceState) => void;
 }) {
@@ -773,6 +806,12 @@ async function streamGeneratePlan({
       const agentStep = parseAgentStep(data);
       if (agentStep) {
         onAgentStep(agentStep);
+      }
+    }
+    if (event.event === "tool-result") {
+      const toolResult = parseToolResult(data);
+      if (toolResult) {
+        onToolResult(toolResult);
       }
     }
     if (event.event === "draft-delta") {
@@ -839,6 +878,17 @@ function parseAgentStep(value: Record<string, unknown>): Pick<AgentStep, "step" 
     return null;
   }
   return { step, status, message };
+}
+
+function parseToolResult(value: Record<string, unknown>): ToolResult | null {
+  const toolName = typeof value.toolName === "string" ? value.toolName : "";
+  const label = typeof value.label === "string" ? value.label : "";
+  const status = typeof value.status === "string" ? value.status : "";
+  const summary = typeof value.summary === "string" ? value.summary : "";
+  if (!toolName.trim() || !label.trim() || !isAgentStepStatus(status) || !summary.trim()) {
+    return null;
+  }
+  return { toolName, label, status, summary };
 }
 
 function isAgentStepKey(value: string): value is AgentStepKey {

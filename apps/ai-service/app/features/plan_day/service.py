@@ -56,8 +56,10 @@ Travel memories from this private space: {travel_memories}
 
 def stream_plan_day(request: PlanDayGenerateRequest) -> Generator[str, None, None]:
     yield sse_event("progress", {"step": "START", "message": "正在分析当天安排"})
+    yield _tool_result_event(_place_constraint_result(request))
     yield sse_event("progress", {"step": "WEATHER", "message": "正在查询天气"})
     weather = get_weather(request.destination, request.plan_date or "")
+    yield _tool_result_event(_weather_tool_result(weather.to_dict()))
 
     yield sse_event("progress", {"step": "PLACE_GROUPING", "message": "正在分析地点组合"})
     yield sse_event("progress", {"step": "GENERATE_PLAN", "message": "正在安排上午、下午和晚上"})
@@ -74,6 +76,51 @@ def stream_plan_day(request: PlanDayGenerateRequest) -> Generator[str, None, Non
         yield sse_event("draft", draft.to_dict())
     except Exception as exc:
         yield sse_event("error", {"message": str(exc) or "AI 生成失败"})
+
+
+def _tool_result_event(result: Dict) -> str:
+    return sse_event("tool-result", result)
+
+
+def _place_constraint_result(request: PlanDayGenerateRequest) -> Dict:
+    must_visit_count = len(request.must_visit_places or [])
+    hotel_summary = f"酒店参考点：{request.hotel_location}" if request.hotel_location else "未填写酒店地点，将只按用户地点做顺路安排"
+    return {
+        "toolName": "place_constraint",
+        "label": "地点约束工具",
+        "status": "done",
+        "summary": f"已锁定 {len(request.places)} 个用户地点，{must_visit_count} 个必去地点；{hotel_summary}",
+        "data": {
+            "places": request.places,
+            "mustVisitPlaces": request.must_visit_places,
+            "hotelLocation": request.hotel_location,
+            "morningMode": request.morning_mode,
+            "afternoonMode": request.afternoon_mode,
+            "eveningMode": request.evening_mode,
+        },
+    }
+
+
+def _weather_tool_result(weather: Dict) -> Dict:
+    if weather.get("available"):
+        summary = (
+            f"{weather.get('city') or '目的地'} {weather.get('date') or ''}："
+            f"{weather.get('weather') or '天气不明'}，"
+            f"{weather.get('temperatureMin')}~{weather.get('temperatureMax')}℃，"
+            f"降雨概率 {weather.get('rainProbability')}%"
+        )
+        status = "done"
+    else:
+        tips = weather.get("tips") or []
+        summary = tips[0] if tips else "天气信息不可用，AI 会按常规出行建议规划。"
+        status = "failed" if weather.get("reason") == "WEATHER_SERVICE_ERROR" else "skipped"
+    return {
+        "toolName": "weather_context",
+        "label": "天气上下文工具",
+        "status": status,
+        "summary": summary,
+        "data": weather,
+    }
 
 
 def _stream_generate_with_qwen(request: PlanDayGenerateRequest, weather: Dict) -> Generator[Union[str, PlanDayDraft], None, None]:
