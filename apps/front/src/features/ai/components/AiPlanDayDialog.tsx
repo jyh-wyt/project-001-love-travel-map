@@ -99,6 +99,13 @@ type AiAgentRunEvents = {
   events: AiAgentEventItem[];
 };
 
+type AiGenerationError = {
+  type: string;
+  stage: string;
+  message: string;
+  detail: string;
+};
+
 type AiPlanDayDialogProps = {
   day: PlanDay;
   isOpen: boolean;
@@ -136,6 +143,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
   const [referencedMemories, setReferencedMemories] = useState<MemoryReferenceState | null>(null);
   const [draft, setDraft] = useState<AiDraft | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [generationError, setGenerationError] = useState<AiGenerationError | null>(null);
   const [regenerateChoiceOpen, setRegenerateChoiceOpen] = useState(false);
   const [revisionInstruction, setRevisionInstruction] = useState("");
   const [applyConfirmOpen, setApplyConfirmOpen] = useState(false);
@@ -233,6 +241,7 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
       setRunEvents(null);
       setRunEventsLoading(false);
       setErrorMessage("");
+      setGenerationError(null);
       setRegenerateChoiceOpen(false);
       setApplyConfirmOpen(false);
 
@@ -259,7 +268,13 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
       setGenerateState("done");
     } catch (error) {
       setGenerateState("idle");
-      setErrorMessage(toErrorMessage(error));
+      if (error instanceof AiGenerationStreamError) {
+        setGenerationError(error.info);
+        setErrorMessage(error.info.message);
+      } else {
+        setGenerationError(null);
+        setErrorMessage(toErrorMessage(error));
+      }
     }
   }
 
@@ -369,6 +384,13 @@ export function AiPlanDayDialog({ day, isOpen, onClose, onApply }: AiPlanDayDial
           {errorMessage ? (
             <div className="ai-dialog-feedback">
               <p className="plan-feedback error">{errorMessage}</p>
+              {generationError ? (
+                <div className="ai-error-meta">
+                  <span>阶段：{formatGenerationErrorStage(generationError.stage)}</span>
+                  <span>类型：{generationError.type}</span>
+                  {generationError.detail ? <small>{generationError.detail}</small> : null}
+                </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -792,6 +814,16 @@ function PreviewPeriod({ label, period }: { label: string; period: PeriodDraft }
   );
 }
 
+class AiGenerationStreamError extends Error {
+  info: AiGenerationError;
+
+  constructor(info: AiGenerationError) {
+    super(info.message);
+    this.name = "AiGenerationStreamError";
+    this.info = info;
+  }
+}
+
 async function streamGeneratePlan({
   dayId,
   destination,
@@ -863,7 +895,7 @@ async function streamGeneratePlan({
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
   let finalDraft: AiDraft | null = null;
-  let streamError = "";
+  let streamError: AiGenerationError | null = null;
   let shouldStopReading = false;
 
   function handleSsePart(part: string) {
@@ -876,7 +908,12 @@ async function streamGeneratePlan({
     try {
       data = JSON.parse(event.data) as Record<string, unknown>;
     } catch {
-      streamError = "AI 返回的数据格式不正确";
+      streamError = {
+        type: "SSE_PARSE_FAILED",
+        stage: "STREAM",
+        message: "AI 返回的数据格式不正确",
+        detail: event.data
+      };
       return;
     }
 
@@ -909,7 +946,7 @@ async function streamGeneratePlan({
       shouldStopReading = true;
     }
     if (event.event === "error") {
-      streamError = typeof data.message === "string" && data.message.trim() ? data.message : "AI 生成失败";
+      streamError = parseAiGenerationError(data);
       shouldStopReading = true;
     }
   }
@@ -943,7 +980,7 @@ async function streamGeneratePlan({
     handleSsePart(buffer);
   }
   if (streamError) {
-    throw new Error(streamError);
+    throw new AiGenerationStreamError(streamError);
   }
   if (!finalDraft) {
     throw new Error("AI 没有返回计划草稿");
@@ -988,6 +1025,28 @@ function parseMemoryReferenceState(value: Record<string, unknown>): MemoryRefere
     items: parseTravelMemories(value.items),
     errorMessage
   };
+}
+
+function parseAiGenerationError(value: Record<string, unknown>): AiGenerationError {
+  const message = typeof value.message === "string" && value.message.trim() ? value.message : "AI 生成失败";
+  return {
+    type: typeof value.type === "string" && value.type.trim() ? value.type : "UNKNOWN",
+    stage: typeof value.stage === "string" && value.stage.trim() ? value.stage : "UNKNOWN",
+    message,
+    detail: typeof value.detail === "string" ? value.detail : ""
+  };
+}
+
+function formatGenerationErrorStage(stage: string) {
+  const labels: Record<string, string> = {
+    CONFIG: "配置检查",
+    MODEL: "模型调用",
+    PARSE: "JSON 解析",
+    VALIDATE: "字段校验",
+    STREAM: "流式传输",
+    UNKNOWN: "未知阶段"
+  };
+  return labels[stage] ?? stage;
 }
 
 function parseTravelMemories(value: unknown): TravelMemory[] {

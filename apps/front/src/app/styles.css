@@ -713,6 +713,24 @@ p {
   color: #8b352f;
 }
 
+.ai-error-meta {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  color: #8b352f;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ai-error-meta span {
+  font-weight: 700;
+}
+
+.ai-error-meta small {
+  overflow-wrap: anywhere;
+  color: rgb(139 53 47 / 0.78);
+}
+
 .plan-feedback.success {
   border: 1px solid rgb(47 107 95 / 0.24);
   background: #eef8f3;
@@ -721,6 +739,11 @@ p {
 
 :root[data-theme="dark"] .plan-feedback.error {
   background: #3a2321;
+  color: #ffd1cc;
+}
+
+:root[data-theme="dark"] .ai-error-meta,
+:root[data-theme="dark"] .ai-error-meta small {
   color: #ffd1cc;
 }
 

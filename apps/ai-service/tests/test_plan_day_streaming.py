@@ -51,6 +51,35 @@ class PlanDayStreamingTest(unittest.TestCase):
         self.assertEqual(1, len(draft_events))
         self.assertIn("青岛一日游", draft_events[0])
 
+    def test_streams_structured_error_when_output_parse_fails(self):
+        request = PlanDayGenerateRequest(
+            requestId="run_1",
+            spaceId=1,
+            userId=1,
+            planDayId=1,
+            modelName="qwen-plus",
+            promptVersion="test",
+            destination="青岛",
+            planDate="2026-07-16",
+            places=["小麦岛", "八大关"],
+            mustVisitPlaces=[],
+            morningMode="PLAY",
+            afternoonMode="PLAY",
+            eveningMode="REST",
+        )
+
+        with patch("app.features.plan_day.service.settings.aliyun_dashscope_api_key", "test-key"), patch(
+            "app.features.plan_day.agent_tools.get_weather",
+            return_value=WeatherResult(available=False, reason="test"),
+        ), patch("app.features.plan_day.service.dashscope.Generation.call", return_value=_fake_stream(["不是 JSON"])):
+            events = list(stream_plan_day(request))
+
+        error_events = [event for event in events if event.startswith("event: error\n")]
+
+        self.assertEqual(1, len(error_events))
+        self.assertIn('"type": "OUTPUT_PARSE_FAILED"', error_events[0])
+        self.assertIn('"stage": "PARSE"', error_events[0])
+
 
 def _fake_stream(chunks):
     for chunk in chunks:

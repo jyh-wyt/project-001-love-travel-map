@@ -11,6 +11,7 @@ from app.features.plan_day.agent_tools import (
     build_place_constraint_result,
     build_weather_context_result,
 )
+from app.features.plan_day.errors import build_plan_day_error_payload
 from app.features.plan_day.output_parser import parse_plan_day_draft_content
 from app.features.plan_day.schemas import PlanDayDraft, PlanDayGenerateRequest
 
@@ -77,7 +78,7 @@ def stream_plan_day(request: PlanDayGenerateRequest) -> Generator[str, None, Non
             raise RuntimeError("AI 没有返回计划草稿")
         yield sse_event("draft", draft.to_dict())
     except Exception as exc:
-        yield sse_event("error", {"message": str(exc) or "AI 生成失败"})
+        yield sse_event("error", build_plan_day_error_payload(exc))
 
 
 def _tool_result_event(result: Dict) -> str:
