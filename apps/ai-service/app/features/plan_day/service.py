@@ -1,5 +1,4 @@
 import json
-import re
 from typing import Dict, Generator, Iterable, List, Union
 
 import dashscope
@@ -12,6 +11,7 @@ from app.features.plan_day.agent_tools import (
     build_place_constraint_result,
     build_weather_context_result,
 )
+from app.features.plan_day.output_parser import parse_plan_day_draft_content
 from app.features.plan_day.schemas import PlanDayDraft, PlanDayGenerateRequest
 
 
@@ -121,8 +121,7 @@ def _stream_generate_with_qwen(request: PlanDayGenerateRequest, tool_results: Li
         yield sse_event("draft-delta", {"text": delta})
 
     content = "".join(content_parts)
-    parsed = json.loads(_strip_code_fence(content))
-    yield PlanDayDraft(**parsed)
+    yield parse_plan_day_draft_content(content)
 
 
 def _iter_dashscope_stream(stream) -> Iterable:
@@ -140,10 +139,3 @@ def _extract_message_content(response) -> str:
     except (AttributeError, IndexError, TypeError):
         return ""
 
-
-def _strip_code_fence(content: str) -> str:
-    text = content.strip()
-    match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    return text
