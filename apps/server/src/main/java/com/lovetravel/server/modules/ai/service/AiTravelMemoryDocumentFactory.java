@@ -92,6 +92,7 @@ public class AiTravelMemoryDocumentFactory {
 
     public String buildPlanSearchQuery(String destination, List<String> places, List<String> mustVisitPlaces, String hotelLocation, String notes) {
         StringBuilder query = new StringBuilder();
+        appendPart(query, "Intent", "检索历史旅行偏好、日记体验和计划经验，用来辅助当前这一天的旅行规划");
         appendPart(query, "Destination", normalize(destination));
         appendPart(query, "Places", String.join(", ", places == null ? List.of() : places));
         appendPart(query, "Must visit", String.join(", ", mustVisitPlaces == null ? List.of() : mustVisitPlaces));

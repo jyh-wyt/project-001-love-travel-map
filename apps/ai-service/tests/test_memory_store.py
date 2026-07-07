@@ -46,6 +46,17 @@ class FakeMilvusClient:
         ]]
 
 
+class NoisyMilvusClient(FakeMilvusClient):
+    def search(self, **kwargs) -> List[List[Dict]]:
+        self.search_calls.append(kwargs)
+        return [[
+            _hit("trip_post_1_duplicate_far", 0.31, "TRIP_POST", 1, "Far duplicate"),
+            _hit("plan_day_2", 0.18, "PLAN_DAY", 2, "Good plan"),
+            _hit("trip_post_1", 0.09, "TRIP_POST", 1, "Best diary"),
+            _hit("trip_post_99", 0.82, "TRIP_POST", 99, "Too far"),
+        ]]
+
+
 class MilvusMemoryStoreTest(unittest.TestCase):
     def test_disabled_store_accepts_items_without_client(self) -> None:
         item = MemoryUpsertItem(
@@ -111,6 +122,39 @@ class MilvusMemoryStoreTest(unittest.TestCase):
         self.assertEqual(["test_memory"], client.loaded_collections)
         self.assertEqual("space_id == 8", client.search_calls[0]["filter"])
         self.assertEqual(["memory_id", "space_id", "user_id", "source_type", "source_id", "city_code", "city_name", "content", "created_at"], client.search_calls[0]["output_fields"])
+
+    def test_search_deduplicates_and_filters_low_quality_results(self) -> None:
+        client = NoisyMilvusClient()
+        client.created = True
+        store = MilvusMemoryStore(
+            enabled=True,
+            client=client,
+            collection="test_memory",
+            dimension=2,
+        )
+
+        results = store.search_memories(space_id=8, query_embedding=[0.1, 0.2], top_k=3)
+
+        self.assertEqual(["trip_post_1", "plan_day_2"], [result.memory_id for result in results])
+        self.assertEqual([0.09, 0.18], [result.score for result in results])
+
+
+def _hit(memory_id: str, distance: float, source_type: str, source_id: int, content: str) -> Dict:
+    return {
+        "id": memory_id,
+        "distance": distance,
+        "entity": {
+            "memory_id": memory_id,
+            "space_id": 8,
+            "user_id": 4,
+            "source_type": source_type,
+            "source_id": source_id,
+            "city_code": "370200",
+            "city_name": "Qingdao",
+            "content": content,
+            "created_at": "2026-06-19",
+        },
+    }
 
 
 if __name__ == "__main__":

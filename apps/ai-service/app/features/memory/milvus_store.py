@@ -5,6 +5,9 @@ from app.core.config import settings
 from app.features.memory.schemas import MemorySearchResult, MemoryUpsertItem
 
 
+MAX_RELEVANT_DISTANCE = 0.75
+
+
 class MilvusMemoryStore:
     """Milvus adapter for travel memories."""
 
@@ -72,7 +75,7 @@ class MilvusMemoryStore:
                 createdAt=entity.get("created_at", ""),
                 score=float(hit.get("distance", 0.0)),
             ))
-        return results
+        return self._rerank_results(results, top_k)
 
     @property
     def client(self) -> Any:
@@ -101,6 +104,16 @@ class MilvusMemoryStore:
 
     def _load_collection(self) -> None:
         self.client.load_collection(collection_name=self.collection)
+
+    def _rerank_results(self, results: List[MemorySearchResult], top_k: int) -> List[MemorySearchResult]:
+        deduplicated = {}
+        for result in sorted(results, key=lambda item: item.score):
+            if result.score > MAX_RELEVANT_DISTANCE:
+                continue
+            key = (result.source_type, result.source_id)
+            if key not in deduplicated:
+                deduplicated[key] = result
+        return list(deduplicated.values())[:top_k]
 
     def _to_entity(self, item: MemoryUpsertItem, embedding: List[float]) -> dict:
         return {

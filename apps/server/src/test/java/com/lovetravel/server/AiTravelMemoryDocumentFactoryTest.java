@@ -65,5 +65,8 @@ class AiTravelMemoryDocumentFactoryTest {
         assertTrue(query.contains("Xiaomai Island"));
         assertTrue(query.contains("May Fourth Square Hotel"));
         assertTrue(query.contains("Prefer relaxed photo spots"));
+        assertTrue(query.contains("历史旅行偏好"));
+        assertTrue(query.contains("日记"));
+        assertTrue(query.contains("计划经验"));
     }
 }
