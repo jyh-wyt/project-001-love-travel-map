@@ -70,4 +70,50 @@ class AiAgentRunEventsTest {
         assertEquals(1, response.getEvents().size());
         assertEquals("TOOL_RESULT", response.getEvents().get(0).getEventType());
     }
+
+    @Test
+    void listRunEventsKeepsFullToolResultJson() {
+        SpaceService spaceService = Mockito.mock(SpaceService.class);
+        AiAgentRunMapper runMapper = Mockito.mock(AiAgentRunMapper.class);
+        AiAgentEventMapper eventMapper = Mockito.mock(AiAgentEventMapper.class);
+
+        CoupleSpace space = new CoupleSpace();
+        space.setId(11L);
+        Mockito.when(spaceService.requireActiveSpace(7L)).thenReturn(space);
+
+        AiAgentRun run = new AiAgentRun();
+        run.setRunId("ai_run_1");
+        run.setSpaceId(11L);
+        run.setAgentType("TRAVEL_DAY_PLAN");
+        run.setModelName("qwen-plus");
+        run.setPromptVersion("travel_day_plan_v1");
+        run.setStatus("SUCCESS");
+        run.setDeleted(0);
+        Mockito.when(runMapper.selectOne(any())).thenReturn(run);
+
+        String toolJson = "{\"toolName\":\"memory_retrieval\",\"label\":\"历史记忆检索工具\",\"summary\":\"已提供 2 条 RAG Top 记忆作为偏好参考\",\"data\":{\"topMemories\":[{\"sourceType\":\"TRIP_POST\",\"cityName\":\"青岛\",\"content\":\"去海边看日落\",\"score\":0.12}]}}";
+        AiAgentEvent toolEvent = new AiAgentEvent();
+        toolEvent.setId(1L);
+        toolEvent.setRunId("ai_run_1");
+        toolEvent.setEventType("TOOL_RESULT");
+        toolEvent.setEventMessage("已提供 2 条 RAG Top 记忆作为偏好参考");
+        toolEvent.setEventJson(toolJson);
+        Mockito.when(eventMapper.selectList(any())).thenReturn(List.of(toolEvent));
+
+        AiPlanDayService service = new AiPlanDayService(
+                spaceService,
+                Mockito.mock(TravelPlanDayMapper.class),
+                runMapper,
+                eventMapper,
+                Mockito.mock(AiPlanDayDraftMapper.class),
+                Mockito.mock(AppUserMapper.class),
+                Mockito.mock(AiTravelMemorySyncService.class),
+                new ObjectMapper(),
+                Mockito.mock(StringRedisTemplate.class),
+                "http://127.0.0.1:8000");
+
+        AiAgentRunEventsResponse response = service.listRunEvents(7L, "ai_run_1");
+
+        assertEquals(toolJson, response.getEvents().get(0).getEventJson());
+    }
 }

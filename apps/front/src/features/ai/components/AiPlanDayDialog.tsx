@@ -1116,13 +1116,69 @@ function formatEventMessage(event: AiAgentEventItem) {
 
 function formatEventDetail(event: AiAgentEventItem) {
   const parsed = parseEventJson(event.eventJson);
-  if (event.eventType === "TOOL_RESULT" && typeof parsed?.summary === "string") {
-    return parsed.summary;
+  if (event.eventType === "TOOL_RESULT") {
+    return formatToolEventDetail(parsed, event.eventMessage);
   }
   if (event.eventType === "AGENT_STEP" && typeof parsed?.message === "string") {
     return parsed.message;
   }
   return event.eventMessage || "暂无摘要";
+}
+
+function formatToolEventDetail(parsed: Record<string, unknown> | null, fallback: string) {
+  if (!parsed) {
+    return fallback || "工具调用完成";
+  }
+  const summary = typeof parsed.summary === "string" ? parsed.summary : fallback;
+  const toolName = typeof parsed.toolName === "string" ? parsed.toolName : "";
+  const data = parsed.data && typeof parsed.data === "object" ? (parsed.data as Record<string, unknown>) : null;
+  if (!data) {
+    return summary || "工具调用完成";
+  }
+
+  if (toolName === "place_constraint") {
+    const places = toStringList(data.places);
+    const mustVisitPlaces = toStringList(data.mustVisitPlaces);
+    const hotelLocation = typeof data.hotelLocation === "string" ? data.hotelLocation : "";
+    const parts = [
+      places.length ? `地点：${places.join("、")}` : "",
+      mustVisitPlaces.length ? `必去：${mustVisitPlaces.join("、")}` : "",
+      hotelLocation ? `酒店：${hotelLocation}` : ""
+    ].filter(Boolean);
+    return parts.length ? `${summary}；${parts.join("；")}` : summary || "地点约束已记录";
+  }
+
+  if (toolName === "weather_context") {
+    const available = data.available === true;
+    if (!available) {
+      const tips = toStringList(data.tips);
+      return tips[0] || summary || "天气信息不可用";
+    }
+    const city = typeof data.city === "string" ? data.city : "";
+    const date = typeof data.date === "string" ? data.date : "";
+    const weather = typeof data.weather === "string" ? data.weather : "";
+    const rainProbability = typeof data.rainProbability === "number" ? `降雨 ${data.rainProbability}%` : "";
+    return [city, date, weather, rainProbability].filter(Boolean).join(" · ") || summary || "天气上下文已记录";
+  }
+
+  if (toolName === "memory_retrieval") {
+    const memories = Array.isArray(data.topMemories) ? data.topMemories.slice(0, visibleMemoryLimit) : [];
+    const previews = memories
+      .map((item) => {
+        if (!item || typeof item !== "object") {
+          return "";
+        }
+        const memory = item as Record<string, unknown>;
+        const source = memory.sourceType === "PLAN_DAY" ? "计划" : "日记";
+        const city = typeof memory.cityName === "string" && memory.cityName ? `${memory.cityName} · ` : "";
+        const content = typeof memory.content === "string" ? memory.content : "";
+        return content ? `${city}${source}：${truncateText(content, 42)}` : "";
+      })
+      .filter(Boolean);
+    return previews.length ? `${summary}；${previews.join("；")}` : summary || "没有可用历史记忆";
+  }
+
+  return summary || "工具调用完成";
 }
 
 function parseEventJson(value: string): Record<string, unknown> | null {
@@ -1135,6 +1191,17 @@ function parseEventJson(value: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+function toStringList(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
+function truncateText(value: string, maxLength: number) {
+  return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
 }
 
 function getTopMemories(memories: TravelMemory[], limit: number) {
