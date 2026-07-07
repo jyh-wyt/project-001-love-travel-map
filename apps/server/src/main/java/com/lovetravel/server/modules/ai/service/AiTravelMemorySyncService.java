@@ -40,6 +40,7 @@ public class AiTravelMemorySyncService {
     private final TravelPlanDayMapper planDayMapper;
     private final AiTravelMemoryIndexMapper memoryIndexMapper;
     private final AiTravelMemoryDocumentFactory documentFactory;
+    private final AiTravelMemoryReasoner memoryReasoner;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final String aiServiceBaseUrl;
@@ -57,6 +58,7 @@ public class AiTravelMemorySyncService {
         this.planDayMapper = planDayMapper;
         this.memoryIndexMapper = memoryIndexMapper;
         this.documentFactory = documentFactory;
+        this.memoryReasoner = new AiTravelMemoryReasoner();
         this.objectMapper = objectMapper;
         this.aiServiceBaseUrl = aiServiceBaseUrl;
         this.httpClient = HttpClient.newBuilder()
@@ -85,7 +87,9 @@ public class AiTravelMemorySyncService {
             if (query.isBlank()) {
                 return new MemorySearchResult(true, List.of(), "");
             }
-            return new MemorySearchResult(true, callPythonSearch(spaceId, query), "");
+            List<Map<String, Object>> memories = callPythonSearch(spaceId, query);
+            enrichMemoryReasons(request, memories);
+            return new MemorySearchResult(true, memories, "");
         } catch (Exception exception) {
             log.warn("AI memory search skipped for spaceId={}: {}", spaceId, exception.getMessage());
             return new MemorySearchResult(false, List.of(), "记忆检索暂时不可用，本次将不参考历史记忆");
@@ -215,6 +219,12 @@ public class AiTravelMemorySyncService {
             throw exception;
         } catch (Exception exception) {
             throw new ApiException("AI memory search failed");
+        }
+    }
+
+    private void enrichMemoryReasons(AiPlanDayGenerateRequest request, List<Map<String, Object>> memories) {
+        for (Map<String, Object> memory : memories) {
+            memory.put("reason", memoryReasoner.explain(request, memory));
         }
     }
 

@@ -53,6 +53,7 @@ type TravelMemory = {
   cityName: string;
   content: string;
   score: number;
+  reason: string;
 };
 
 type MemoryReferenceState = {
@@ -1065,7 +1066,8 @@ function parseTravelMemories(value: unknown): TravelMemory[] {
         sourceId: typeof record.sourceId === "number" ? record.sourceId : 0,
         cityName: typeof record.cityName === "string" ? record.cityName : "",
         content: typeof record.content === "string" ? record.content : "",
-        score: typeof record.score === "number" ? record.score : 0
+        score: typeof record.score === "number" ? record.score : 0,
+        reason: typeof record.reason === "string" ? record.reason : ""
       };
     })
     .filter((item): item is TravelMemory => Boolean(item && item.content.trim()));
@@ -1229,6 +1231,9 @@ function formatMemoryMatchClass(score: number) {
 }
 
 function formatMemoryReason(memory: TravelMemory) {
+  if (memory.reason.trim()) {
+    return `参考原因：${memory.reason.trim()}`;
+  }
   if (memory.sourceType === "PLAN_DAY") {
     return "参考原因：来自你们之前保存过的旅行计划，可帮助 AI 延续已安排过的路线和偏好。";
   }
