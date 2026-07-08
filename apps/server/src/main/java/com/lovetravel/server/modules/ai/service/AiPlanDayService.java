@@ -68,6 +68,7 @@ public class AiPlanDayService {
     private final AppUserMapper appUserMapper;
     private final AiTravelMemorySyncService memorySyncService;
     private final AiPromptContextFactory promptContextFactory;
+    private final AiPlanQualityEvaluator qualityEvaluator;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final String aiServiceBaseUrl;
@@ -92,6 +93,7 @@ public class AiPlanDayService {
         this.appUserMapper = appUserMapper;
         this.memorySyncService = memorySyncService;
         this.promptContextFactory = new AiPromptContextFactory();
+        this.qualityEvaluator = new AiPlanQualityEvaluator();
         this.objectMapper = objectMapper;
         this.redisTemplate = redisTemplate;
         this.httpClient = HttpClient.newBuilder()
@@ -315,7 +317,7 @@ public class AiPlanDayService {
 
             BufferedSseEvent current = new BufferedSseEvent();
             try (java.util.stream.Stream<String> lines = response.body()) {
-                lines.forEach(line -> handlePythonLine(emitter, runId, userId, space, day, current, line));
+                lines.forEach(line -> handlePythonLine(emitter, runId, userId, space, day, request, memorySearchResult, current, line));
             }
 
             AiAgentRun run = findRun(runId);
@@ -332,10 +334,19 @@ public class AiPlanDayService {
         }
     }
 
-    private void handlePythonLine(SseEmitter emitter, String runId, Long userId, CoupleSpace space, TravelPlanDay day, BufferedSseEvent current, String line) {
+    private void handlePythonLine(
+            SseEmitter emitter,
+            String runId,
+            Long userId,
+            CoupleSpace space,
+            TravelPlanDay day,
+            AiPlanDayGenerateRequest request,
+            MemorySearchResult memorySearchResult,
+            BufferedSseEvent current,
+            String line) {
         try {
             if (line == null || line.isBlank()) {
-                dispatchPythonEvent(emitter, runId, userId, space, day, current);
+                dispatchPythonEvent(emitter, runId, userId, space, day, request, memorySearchResult, current);
                 current.clear();
                 return;
             }
@@ -349,7 +360,15 @@ public class AiPlanDayService {
         }
     }
 
-    private void dispatchPythonEvent(SseEmitter emitter, String runId, Long userId, CoupleSpace space, TravelPlanDay day, BufferedSseEvent event) throws IOException {
+    private void dispatchPythonEvent(
+            SseEmitter emitter,
+            String runId,
+            Long userId,
+            CoupleSpace space,
+            TravelPlanDay day,
+            AiPlanDayGenerateRequest request,
+            MemorySearchResult memorySearchResult,
+            BufferedSseEvent event) throws IOException {
         if (event.event == null || event.data == null) {
             return;
         }
@@ -370,7 +389,7 @@ public class AiPlanDayService {
         }
         if ("draft".equals(event.event)) {
             sendAgentStep(emitter, runId, "PLAN_GENERATION", "done", "大模型已返回计划草稿");
-            String data = saveDraftAndEnrichEvent(runId, userId, space, day, event.data);
+            String data = saveDraftAndEnrichEvent(runId, userId, space, day, request, memorySearchResult, event.data);
             sendAgentStep(emitter, runId, "DRAFT_SAVE", "done", "AI 草稿已保存，可以应用到这一天");
             emitter.send(SseEmitter.event().name("draft").data(data));
             return;
@@ -409,6 +428,19 @@ public class AiPlanDayService {
                 memorySearchResult.memories().size(),
                 memorySearchResult.success());
         recordEvent(runId, "PROMPT_CONTEXT", "AI 已加载规划提示词策略", toJson(context));
+    }
+
+    private void recordQualityCheck(
+            String runId,
+            AiPlanDayGenerateRequest request,
+            JsonNode draft,
+            MemorySearchResult memorySearchResult) {
+        Map<String, Object> quality = qualityEvaluator.evaluate(
+                request,
+                draft,
+                memorySearchResult.memories().size(),
+                memorySearchResult.success());
+        recordEvent(runId, "QUALITY_CHECK", "AI 已完成质量检查", toJson(quality));
     }
 
     private Map<String, Object> buildMemoryToolResult(MemorySearchResult memorySearchResult) {
@@ -466,7 +498,14 @@ public class AiPlanDayService {
         emitter.send(SseEmitter.event().name("agent-step").data(data));
     }
 
-    private String saveDraftAndEnrichEvent(String runId, Long userId, CoupleSpace space, TravelPlanDay day, String data) {
+    private String saveDraftAndEnrichEvent(
+            String runId,
+            Long userId,
+            CoupleSpace space,
+            TravelPlanDay day,
+            AiPlanDayGenerateRequest request,
+            MemorySearchResult memorySearchResult,
+            String data) {
         try {
             JsonNode node = objectMapper.readTree(data);
             AiPlanDayDraft draft = new AiPlanDayDraft();
@@ -491,6 +530,7 @@ public class AiPlanDayService {
                 runMapper.updateById(run);
             }
             recordEvent(runId, "DRAFT", "AI 计划草稿已生成", data);
+            recordQualityCheck(runId, request, node, memorySearchResult);
 
             ObjectNode enriched = node.deepCopy();
             enriched.put("runId", runId);

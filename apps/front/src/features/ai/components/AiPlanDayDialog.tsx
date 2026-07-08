@@ -1104,7 +1104,8 @@ function formatEventType(eventType: string) {
     DRAFT: "草稿",
     ERROR: "错误",
     PROGRESS: "进度",
-    PROMPT_CONTEXT: "提示词"
+    PROMPT_CONTEXT: "提示词",
+    QUALITY_CHECK: "质量检查"
   };
   return labels[eventType] ?? eventType;
 }
@@ -1125,6 +1126,9 @@ function formatEventDetail(event: AiAgentEventItem) {
   if (event.eventType === "PROMPT_CONTEXT") {
     return formatPromptContextDetail(parsed, event.eventMessage);
   }
+  if (event.eventType === "QUALITY_CHECK") {
+    return formatQualityCheckDetail(parsed, event.eventMessage);
+  }
   if (event.eventType === "AGENT_STEP" && typeof parsed?.message === "string") {
     return parsed.message;
   }
@@ -1142,6 +1146,19 @@ function formatPromptContextDetail(parsed: Record<string, unknown> | null, fallb
   const modules = toStringList(parsed.enabledModules);
   const moduleText = modules.length ? `启用 ${modules.length} 个规划模块` : "";
   return [promptVersion, modelName, regenerateMode, memoryCount, moduleText].filter(Boolean).join(" · ") || fallback || "AI 已加载规划提示词策略";
+}
+
+function formatQualityCheckDetail(parsed: Record<string, unknown> | null, fallback: string) {
+  if (!parsed) {
+    return fallback || "AI 已完成质量检查";
+  }
+  if (typeof parsed.summary === "string" && parsed.summary.trim()) {
+    return parsed.summary;
+  }
+  const placeScope = parsed.placeScopeStatus === "PASS" ? "地点范围符合输入" : "地点范围需要复核";
+  const memoryUsage = parsed.memoryUsageStatus === "USED" ? "已参考历史记忆" : "未使用历史记忆";
+  const revision = parsed.revisionStatus === "CHECKED" ? "已处理修改要求" : "";
+  return [placeScope, memoryUsage, revision].filter(Boolean).join("；") || fallback || "AI 已完成质量检查";
 }
 
 function formatToolEventDetail(parsed: Record<string, unknown> | null, fallback: string) {
