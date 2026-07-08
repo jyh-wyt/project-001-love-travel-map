@@ -1103,7 +1103,8 @@ function formatEventType(eventType: string) {
     DRAFT_DELTA: "流式",
     DRAFT: "草稿",
     ERROR: "错误",
-    PROGRESS: "进度"
+    PROGRESS: "进度",
+    PROMPT_CONTEXT: "提示词"
   };
   return labels[eventType] ?? eventType;
 }
@@ -1121,10 +1122,26 @@ function formatEventDetail(event: AiAgentEventItem) {
   if (event.eventType === "TOOL_RESULT") {
     return formatToolEventDetail(parsed, event.eventMessage);
   }
+  if (event.eventType === "PROMPT_CONTEXT") {
+    return formatPromptContextDetail(parsed, event.eventMessage);
+  }
   if (event.eventType === "AGENT_STEP" && typeof parsed?.message === "string") {
     return parsed.message;
   }
   return event.eventMessage || "暂无摘要";
+}
+
+function formatPromptContextDetail(parsed: Record<string, unknown> | null, fallback: string) {
+  if (!parsed) {
+    return fallback || "AI 已加载规划提示词策略";
+  }
+  const promptVersion = typeof parsed.promptVersion === "string" ? parsed.promptVersion : "";
+  const modelName = typeof parsed.modelName === "string" ? parsed.modelName : "";
+  const memoryCount = typeof parsed.memoryCount === "number" ? `参考记忆 ${parsed.memoryCount} 条` : "";
+  const regenerateMode = parsed.regenerateMode === "REVISE" ? "按修改要求调整" : "生成新计划";
+  const modules = toStringList(parsed.enabledModules);
+  const moduleText = modules.length ? `启用 ${modules.length} 个规划模块` : "";
+  return [promptVersion, modelName, regenerateMode, memoryCount, moduleText].filter(Boolean).join(" · ") || fallback || "AI 已加载规划提示词策略";
 }
 
 function formatToolEventDetail(parsed: Record<string, unknown> | null, fallback: string) {

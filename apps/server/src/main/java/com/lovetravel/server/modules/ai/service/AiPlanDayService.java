@@ -67,6 +67,7 @@ public class AiPlanDayService {
     private final AiPlanDayDraftMapper draftMapper;
     private final AppUserMapper appUserMapper;
     private final AiTravelMemorySyncService memorySyncService;
+    private final AiPromptContextFactory promptContextFactory;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
     private final String aiServiceBaseUrl;
@@ -90,6 +91,7 @@ public class AiPlanDayService {
         this.draftMapper = draftMapper;
         this.appUserMapper = appUserMapper;
         this.memorySyncService = memorySyncService;
+        this.promptContextFactory = new AiPromptContextFactory();
         this.objectMapper = objectMapper;
         this.redisTemplate = redisTemplate;
         this.httpClient = HttpClient.newBuilder()
@@ -294,6 +296,7 @@ public class AiPlanDayService {
                     memoryRetrievalMessage(memorySearchResult));
             sendMemories(emitter, runId, memorySearchResult);
             sendToolResult(emitter, runId, buildMemoryToolResult(memorySearchResult));
+            recordPromptContext(runId, request, memorySearchResult);
             sendAgentStep(emitter, runId, "PLAN_GENERATION", "running", "正在调用大模型生成当天计划");
 
             HttpRequest pythonRequest = HttpRequest.newBuilder()
@@ -396,6 +399,16 @@ public class AiPlanDayService {
         String data = toJson(result);
         recordEvent(runId, "TOOL_RESULT", String.valueOf(result.getOrDefault("summary", "Agent 工具调用完成")), data);
         emitter.send(SseEmitter.event().name("tool-result").data(data));
+    }
+
+    private void recordPromptContext(String runId, AiPlanDayGenerateRequest request, MemorySearchResult memorySearchResult) {
+        Map<String, Object> context = promptContextFactory.buildPlanDayContext(
+                PROMPT_VERSION,
+                MODEL_NAME,
+                request,
+                memorySearchResult.memories().size(),
+                memorySearchResult.success());
+        recordEvent(runId, "PROMPT_CONTEXT", "AI 已加载规划提示词策略", toJson(context));
     }
 
     private Map<String, Object> buildMemoryToolResult(MemorySearchResult memorySearchResult) {
