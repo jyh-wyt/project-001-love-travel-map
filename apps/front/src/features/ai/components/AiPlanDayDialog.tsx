@@ -74,6 +74,7 @@ type ToolResult = {
   label: string;
   status: AgentStepStatus;
   summary: string;
+  data: Record<string, unknown> | null;
 };
 
 type AiApplyResponse = {
@@ -666,11 +667,49 @@ function AiAgentTrace({ steps, toolResults }: { steps: AgentStep[]; toolResults:
             <article className={`ai-tool-result ${result.status}`} key={result.toolName}>
               <strong>{result.label}</strong>
               <p>{result.summary}</p>
+              <AiToolResultDebug result={result} />
             </article>
           ))}
         </div>
       ) : null}
     </section>
+  );
+}
+
+function AiToolResultDebug({ result }: { result: ToolResult }) {
+  if (result.toolName !== "memory_retrieval" || !result.data) {
+    return null;
+  }
+  const query = typeof result.data.query === "string" ? result.data.query.trim() : "";
+  const memories = Array.isArray(result.data.topMemories) ? result.data.topMemories.slice(0, visibleMemoryLimit) : [];
+  if (!query && memories.length === 0) {
+    return null;
+  }
+  return (
+    <details className="ai-tool-debug">
+      <summary>查看 RAG 检索细节</summary>
+      {query ? (
+        <div className="ai-tool-debug-query">
+          <span>检索 query</span>
+          <p>{query}</p>
+        </div>
+      ) : null}
+      {memories.length > 0 ? (
+        <div className="ai-tool-debug-list">
+          {memories.map((item, index) => {
+            const memory = item && typeof item === "object" ? (item as Record<string, unknown>) : null;
+            if (!memory) {
+              return null;
+            }
+            return (
+              <p key={`${memory.memoryId ?? index}`}>
+                Top {index + 1}：{formatToolMemoryPreview(memory)}
+              </p>
+            );
+          })}
+        </div>
+      ) : null}
+    </details>
   );
 }
 
@@ -1007,7 +1046,8 @@ function parseToolResult(value: Record<string, unknown>): ToolResult | null {
   if (!toolName.trim() || !label.trim() || !isAgentStepStatus(status) || !summary.trim()) {
     return null;
   }
-  return { toolName, label, status, summary };
+  const data = value.data && typeof value.data === "object" ? (value.data as Record<string, unknown>) : null;
+  return { toolName, label, status, summary, data };
 }
 
 function isAgentStepKey(value: string): value is AgentStepKey {
@@ -1164,23 +1204,29 @@ function formatToolEventDetail(parsed: Record<string, unknown> | null, fallback:
   }
 
   if (toolName === "memory_retrieval") {
+    const query = typeof data.query === "string" && data.query.trim() ? `检索 query：${truncateText(data.query.trim(), 80)}` : "";
     const memories = Array.isArray(data.topMemories) ? data.topMemories.slice(0, visibleMemoryLimit) : [];
     const previews = memories
       .map((item) => {
         if (!item || typeof item !== "object") {
           return "";
         }
-        const memory = item as Record<string, unknown>;
-        const source = memory.sourceType === "PLAN_DAY" ? "计划" : "日记";
-        const city = typeof memory.cityName === "string" && memory.cityName ? `${memory.cityName} · ` : "";
-        const content = typeof memory.content === "string" ? memory.content : "";
-        return content ? `${city}${source}：${truncateText(content, 42)}` : "";
+        return formatToolMemoryPreview(item as Record<string, unknown>);
       })
       .filter(Boolean);
-    return previews.length ? `${summary}；${previews.join("；")}` : summary || "没有可用历史记忆";
+    const parts = [query, ...previews].filter(Boolean);
+    return parts.length ? `${summary}；${parts.join("；")}` : summary || "没有可用历史记忆";
   }
 
   return summary || "工具调用完成";
+}
+
+function formatToolMemoryPreview(memory: Record<string, unknown>) {
+  const source = memory.sourceType === "PLAN_DAY" ? "计划" : "日记";
+  const city = typeof memory.cityName === "string" && memory.cityName ? `${memory.cityName} · ` : "";
+  const content = typeof memory.content === "string" ? memory.content : "";
+  const reason = typeof memory.reason === "string" && memory.reason ? `（${memory.reason}）` : "";
+  return content ? `${city}${source}：${truncateText(content, 42)}${reason}` : "";
 }
 
 function parseEventJson(value: string): Record<string, unknown> | null {

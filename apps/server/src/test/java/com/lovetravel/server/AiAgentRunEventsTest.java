@@ -16,6 +16,8 @@ import com.lovetravel.server.modules.plan.mapper.TravelPlanDayMapper;
 import com.lovetravel.server.modules.space.domain.CoupleSpace;
 import com.lovetravel.server.modules.space.service.SpaceService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.lang.reflect.Method;
+import java.util.Map;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -115,5 +117,44 @@ class AiAgentRunEventsTest {
         AiAgentRunEventsResponse response = service.listRunEvents(7L, "ai_run_1");
 
         assertEquals(toolJson, response.getEvents().get(0).getEventJson());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void memoryToolResultIncludesRetrievalQueryForDebugging() throws Exception {
+        AiPlanDayService service = new AiPlanDayService(
+                Mockito.mock(SpaceService.class),
+                Mockito.mock(TravelPlanDayMapper.class),
+                Mockito.mock(AiAgentRunMapper.class),
+                Mockito.mock(AiAgentEventMapper.class),
+                Mockito.mock(AiPlanDayDraftMapper.class),
+                Mockito.mock(AppUserMapper.class),
+                Mockito.mock(AiTravelMemorySyncService.class),
+                new ObjectMapper(),
+                Mockito.mock(StringRedisTemplate.class),
+                "http://127.0.0.1:8000");
+
+        AiTravelMemorySyncService.MemorySearchResult memorySearchResult =
+                new AiTravelMemorySyncService.MemorySearchResult(
+                        true,
+                        List.of(Map.of(
+                                "memoryId", "trip_post_1",
+                                "sourceType", "TRIP_POST",
+                                "cityName", "青岛",
+                                "content", "去海边看日落",
+                                "score", 0.12,
+                                "reason", "城市匹配：青岛")),
+                        "",
+                        "Intent: 检索历史旅行偏好\nDestination: 青岛");
+
+        Method method = AiPlanDayService.class.getDeclaredMethod(
+                "buildMemoryToolResult", AiTravelMemorySyncService.MemorySearchResult.class);
+        method.setAccessible(true);
+
+        Map<String, Object> result = (Map<String, Object>) method.invoke(service, memorySearchResult);
+        Map<String, Object> data = (Map<String, Object>) result.get("data");
+
+        assertEquals("Intent: 检索历史旅行偏好\nDestination: 青岛", data.get("query"));
+        assertEquals(1, ((List<?>) data.get("topMemories")).size());
     }
 }

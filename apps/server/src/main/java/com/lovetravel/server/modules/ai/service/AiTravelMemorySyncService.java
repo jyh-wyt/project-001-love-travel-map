@@ -85,14 +85,14 @@ public class AiTravelMemorySyncService {
                     request.getHotelLocation(),
                     request.getNotes());
             if (query.isBlank()) {
-                return new MemorySearchResult(true, List.of(), "");
+                return new MemorySearchResult(true, List.of(), "", query);
             }
             List<Map<String, Object>> memories = callPythonSearch(spaceId, query);
             enrichMemoryReasons(request, memories);
-            return new MemorySearchResult(true, memories, "");
+            return new MemorySearchResult(true, memories, "", query);
         } catch (Exception exception) {
             log.warn("AI memory search skipped for spaceId={}: {}", spaceId, exception.getMessage());
-            return new MemorySearchResult(false, List.of(), "记忆检索暂时不可用，本次将不参考历史记忆");
+            return new MemorySearchResult(false, List.of(), "记忆检索暂时不可用，本次将不参考历史记忆", "");
         }
     }
 
@@ -276,6 +276,6 @@ public class AiTravelMemorySyncService {
     public record SyncResult(int changedCount, int skippedCount, boolean success) {
     }
 
-    public record MemorySearchResult(boolean success, List<Map<String, Object>> memories, String errorMessage) {
+    public record MemorySearchResult(boolean success, List<Map<String, Object>> memories, String errorMessage, String query) {
     }
 }

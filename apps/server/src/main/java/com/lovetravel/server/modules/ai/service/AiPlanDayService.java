@@ -383,6 +383,7 @@ public class AiPlanDayService {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("success", memorySearchResult.success());
         payload.put("items", memorySearchResult.memories());
+        payload.put("query", memorySearchResult.query() == null ? "" : memorySearchResult.query());
         payload.put("errorMessage", memorySearchResult.errorMessage() == null ? "" : memorySearchResult.errorMessage());
         String data = toJson(payload);
         recordEvent(runId, "MEMORIES", memorySearchResult.success()
@@ -418,7 +419,9 @@ public class AiPlanDayService {
         result.put("label", "历史记忆检索工具");
         result.put("status", status);
         result.put("summary", summary);
-        result.put("data", Map.of("topMemories", memories.stream().limit(3).toList()));
+        result.put("data", Map.of(
+                "query", memorySearchResult.query() == null ? "" : memorySearchResult.query(),
+                "topMemories", memories.stream().limit(3).toList()));
         return result;
     }
 
