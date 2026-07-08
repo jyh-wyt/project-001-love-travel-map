@@ -1546,40 +1546,6 @@ p {
   line-height: 1.55;
 }
 
-.ai-tool-debug {
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.ai-tool-debug summary {
-  width: fit-content;
-  cursor: pointer;
-  color: var(--accent-strong);
-  font-weight: 800;
-}
-
-.ai-tool-debug-query,
-.ai-tool-debug-list {
-  display: grid;
-  gap: 4px;
-  margin-top: 8px;
-  border-left: 2px solid color-mix(in srgb, var(--accent) 28%, var(--line));
-  padding-left: 9px;
-}
-
-.ai-tool-debug-query span {
-  color: var(--muted);
-  font-weight: 800;
-}
-
-.ai-tool-debug-query p,
-.ai-tool-debug-list p {
-  margin: 0;
-  overflow-wrap: anywhere;
-  color: var(--ink);
-}
-
 .ai-tool-result.skipped {
   background: var(--surface-soft);
 }

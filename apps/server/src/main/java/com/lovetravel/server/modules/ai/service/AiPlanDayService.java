@@ -412,7 +412,7 @@ public class AiPlanDayService {
             summary = "当前空间没有匹配到可参考的历史记忆";
         } else {
             status = "done";
-            summary = "已检索到 " + memories.size() + " 条历史记忆，前 3 条会用于辅助规划";
+            summary = "已参考 " + memories.size() + " 条历史记忆辅助规划";
         }
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("toolName", "memory_retrieval");
